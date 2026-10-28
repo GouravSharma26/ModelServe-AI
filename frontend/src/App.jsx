@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 
-const DEFAULT_API_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+const DEFAULT_API_URL =
+  import.meta.env.VITE_API_BASE_URL || 'https://modelserve-ai.onrender.com';
 
 const INITIAL_FEATURES = {
   gender: 'Female',

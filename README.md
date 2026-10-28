@@ -1,6 +1,25 @@
 # ModelServe AI
 
-**Project status: Fast Track release implemented & verified locally and in CI.** The repository contains a complete, reproducible ML training/evaluation pipeline, FastAPI inference service, PostgreSQL telemetry persistence, Streamlit monitoring dashboard, Docker Compose multi-service deployment, and GitHub Actions CI.
+## Executive Summary
+
+ModelServe AI is a production-oriented machine learning inference platform for customer churn classification. It combines a scikit-learn prediction pipeline with a FastAPI REST API, persistent PostgreSQL telemetry, and an interactive React dashboard.
+
+### Project Highlights
+
+- **ML Inference:** Serves customer churn predictions through a validated, versioned scikit-learn model.
+- **Reliability:** Separates application liveness from model and database readiness, with SHA-256 model artifact integrity verification.
+- **Observability:** Records inference telemetry in PostgreSQL and exposes rolling-window prediction statistics and latency percentiles (p50, p95, p99).
+- **API Engineering:** Uses FastAPI and strict Pydantic schemas to validate prediction requests and return structured responses.
+- **CI/CD:** Uses GitHub Actions to automate testing, container builds, and integration checks.
+- **Cloud Deployment:** Hosts the API on Render, PostgreSQL on Neon, and the React + Vite dashboard on Vercel.
+
+### Live Demo
+
+- **Dashboard:** [https://model-serve-ai.vercel.app/](https://model-serve-ai.vercel.app/)
+- **API Documentation:** [https://modelserve-ai.onrender.com/docs](https://modelserve-ai.onrender.com/docs)
+- **Source Code:** [https://github.com/GouravSharma26/ModelServe-AI](https://github.com/GouravSharma26/ModelServe-AI)
+
+---
 
 ## Features implemented
 
