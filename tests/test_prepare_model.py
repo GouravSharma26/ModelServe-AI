@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 
 from modelserve.model_loader import load_active_model
-from scripts.prepare_model import prepare_model
+from modelserve.model_preparation import prepare_model
 from tests.conftest import make_test_dataframe
 
 

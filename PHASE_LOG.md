@@ -303,3 +303,32 @@ No implementation status is assumed by this documentation package. Antigravity m
 **Git**
 - Working tree clean and ready for user review prior to commit/push per AGENTS.md Rule 14.
 
+### 2026-10-28 — Import architecture fix: model preparation packaging & CI collection
+**Status:** DONE
+
+**Summary**
+- Fixed pytest collection failure in CI (`ModuleNotFoundError: No module named 'scripts'`) caused by `tests/test_prepare_model.py` importing directly from uninstalled root `scripts/`.
+- Migrated core model preparation logic to `src/modelserve/model_preparation.py` under the primary package.
+- Converted `scripts/prepare_model.py` into a thin CLI wrapper around `modelserve.model_preparation:main`.
+- Added `scripts/__init__.py` to establish `scripts` as a valid package.
+- Added console entrypoint `modelserve-prepare = "modelserve.model_preparation:main"` in `pyproject.toml`.
+- Updated `tests/test_prepare_model.py` to import `from modelserve.model_preparation import prepare_model`.
+- Verified entire test suite, Docker builds, model preparation, Compose stack, and smoke test.
+
+**Files**
+- Added `src/modelserve/model_preparation.py`, `scripts/__init__.py`.
+- Updated `scripts/prepare_model.py`, `tests/test_prepare_model.py`, `pyproject.toml`, `PHASE_LOG.md`.
+
+**Commands and Results**
+- `pytest -ra` — 56 passed, 12 warnings in 2.98s.
+- `python -m pip check` — exit 0 ("No broken requirements found.").
+- `python -m compileall -q src tests scripts` — exit 0.
+- `docker build -f Dockerfile.api -t modelserve-api:test .` — exit 0.
+- `docker build -f Dockerfile.dashboard -t modelserve-dashboard:test .` — exit 0.
+- `python scripts/prepare_model.py --output artifacts/models` — exit 0; trained and verified `telco-churn-20261028T151857Z` (PR-AUC: 0.6232, F1: 0.6247).
+- `docker compose up -d --build` — exit 0; postgres, api, and dashboard running healthy.
+- `curl.exe http://127.0.0.1:8000/health/ready` — HTTP 200 `{"status":"ready","model_version":"telco-churn-20261028T151857Z","database_connected":true}`.
+- `curl.exe http://127.0.0.1:8501/_stcore/health` — HTTP 200 `ok`.
+- `python scripts/smoke_test.py --url http://127.0.0.1:8000 --dashboard-url http://127.0.0.1:8501` — exit 0; all 7 steps passed.
+
+

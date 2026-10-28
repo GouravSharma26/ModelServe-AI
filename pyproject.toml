@@ -27,6 +27,7 @@ dependencies = [
 [project.scripts]
 modelserve-train = "modelserve.training:main"
 modelserve-api = "modelserve.app:run"
+modelserve-prepare = "modelserve.model_preparation:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
