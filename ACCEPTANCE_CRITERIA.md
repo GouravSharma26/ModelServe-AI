@@ -65,9 +65,9 @@ Never mark `DONE` based on file existence alone.
 - [x] Container runs as non-root where feasible. (USER appuser in Dockerfile.api and Dockerfile.dashboard.)
 - [x] Startup ordering uses health/readiness rather than timing sleeps alone. (depends_on service_healthy for api and dashboard.)
 - [x] `docker compose config` succeeds. (Validated exit 0.)
-- [ ] Images build from a clean checkout. (Requires Docker daemon running locally or CI.)
-- [ ] Documented smoke test passes against live compose containers.
-- [ ] Public deployment is verified from outside the deployment environment before URL is claimed.
+- [x] Images build from a clean checkout. (Dockerfile.api and Dockerfile.dashboard built successfully with pinned dependencies and non-root appuser.)
+- [x] Documented smoke test passes against live compose containers. (scripts/smoke_test.py verified against running stack.)
+- [ ] Public deployment is verified from outside the deployment environment before URL is claimed. (Honest disclosure: local Docker Compose verified; no public cloud deployment claimed.)
 
 ## Engineering quality
 - [x] Unit tests cover schemas, preprocessing, and metrics.

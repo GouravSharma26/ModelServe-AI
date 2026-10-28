@@ -3,15 +3,14 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: modelserve_user
-      POSTGRES_PASSWORD: modelserve_password
-      POSTGRES_DB: modelserve_db
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER:-modelserve_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-modelserve_password}
+      POSTGRES_DB: ${POSTGRES_DB:-modelserve_db}
+    # Database port remains internal to the compose network for security
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U modelserve_user -d modelserve_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-modelserve_user} -d ${POSTGRES_DB:-modelserve_db}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -23,13 +22,13 @@ services:
     restart: unless-stopped
     command: sh -c "alembic upgrade head && python -m uvicorn modelserve.app:app --host 0.0.0.0 --port 8000"
     environment:
-      DATABASE_URL: postgresql://modelserve_user:modelserve_password@postgres:5432/modelserve_db
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-modelserve_user}:${POSTGRES_PASSWORD:-modelserve_password}@postgres:5432/${POSTGRES_DB:-modelserve_db}
       MODELSERVE_ARTIFACTS_DIR: /app/artifacts/models
       MODELSERVE_HOST: 0.0.0.0
       MODELSERVE_PORT: 8000
-      MODELSERVE_LOG_LEVEL: INFO
+      MODELSERVE_LOG_LEVEL: ${MODELSERVE_LOG_LEVEL:-INFO}
     ports:
-      - "8000:8000"
+      - "${API_PORT_BINDING:-127.0.0.1:8000}:8000"
     volumes:
       - ./artifacts:/app/artifacts:ro
     depends_on:
@@ -48,9 +47,9 @@ services:
     restart: unless-stopped
     environment:
       API_URL: http://api:8000
-      DATABASE_URL: postgresql://modelserve_user:modelserve_password@postgres:5432/modelserve_db
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-modelserve_user}:${POSTGRES_PASSWORD:-modelserve_password}@postgres:5432/${POSTGRES_DB:-modelserve_db}
     ports:
-      - "8501:8501"
+      - "${DASHBOARD_PORT_BINDING:-127.0.0.1:8501}:8501"
     depends_on:
       api:
         condition: service_healthy

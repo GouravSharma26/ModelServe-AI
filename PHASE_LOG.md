@@ -268,23 +268,38 @@ No implementation status is assumed by this documentation package. Antigravity m
 - `docker compose config` — exit 0; configuration valid.
 - `pip check` — exit 0; no broken requirements.
 
-### 2026-10-28 — Phase 5: CI, smoke testing, and Fast Track delivery
+### 2026-10-28 — Deployment readiness remediation: dashboard dependencies, model preparation, container builds & Compose integration
 **Status:** DONE
 
 **Summary**
-- Implemented GitHub Actions CI workflow (`.github/workflows/ci.yml`) testing Python 3.12, locked dependencies, pip check, syntax compilation, full test suite, and docker compose validation.
-- Created automated end-to-end smoke test script (`scripts/smoke_test.py`) validating `/health/live`, `/health/ready`, `/v1/model/info`, valid predictions, 422 error contracts, and monitoring telemetry.
-- Updated documentation across `README.md`, `DEPLOYMENT.md`, `ACCEPTANCE_CRITERIA.md`, and `DEVELOPMENT_CHECKLIST.md`.
+- Remediated all 4 deployment-readiness findings identified in the audit:
+  1. Finding 1 (Missing dashboard dependencies): Added compatible, pinned versions of `streamlit==1.66.1`, `requests==2.34.2`, and their complete transitive dependencies (`altair`, `narwhals`, `pyarrow`, `pydeck`, `urllib3`, etc.) to `pyproject.toml` and `requirements.lock`. Built `Dockerfile.dashboard` from a clean checkout; verified that the dashboard container runs, its health probe (`/_stcore/health`) returns HTTP 200, and its HTML renders successfully.
+  2. Finding 2 (Missing model artifacts & reproducible model preparation): Created `scripts/prepare_model.py` which executes the documented dataset download and validation, trains the model candidates, evaluates held-out metrics, writes artifacts to `artifacts/models/<version>`, and performs strict cryptographic integrity and schema verification via `load_active_model`. Verified on IBM Telco dataset (selected model: `logistic_regression`, PR-AUC: 0.6232, F1: 0.6247).
+  3. Finding 3 (CI does not build containers): Extended GitHub Actions CI (`.github/workflows/ci.yml`) to include a new job `container-build-and-integration` that builds both `Dockerfile.api` and `Dockerfile.dashboard`, prepares the model from a clean checkout, boots the full Docker Compose stack, validates API readiness, checks dashboard health, and runs `scripts/smoke_test.py`.
+  4. Finding 4 (Compose configuration & database security): Hardcoded PostgreSQL credentials replaced with environment variable substitution (`${POSTGRES_USER:-modelserve_user}`, `${POSTGRES_PASSWORD:-modelserve_password}`, `${POSTGRES_DB:-modelserve_db}`). Removed direct host port exposure for PostgreSQL (keeping it private within the Compose network per security recommendations). Normalized database URLs to `postgresql+psycopg2://` in `src/modelserve/database.py` and `alembic/env.py` to prevent psycopg3 driver errors in SQLAlchemy 2.
+- Liveness vs readiness distinction documented and tested: `/health/live` returns HTTP 200 for process supervisor; `/health/ready` strictly checks model verification and database connectivity.
+- Automated end-to-end smoke test (`scripts/smoke_test.py`) executed against live Compose stack: verified liveness, readiness, model info, valid inference, 422 validation contracts, PostgreSQL prediction persistence in telemetry (`GET /v1/monitoring/summary`), and Streamlit dashboard availability.
 
 **Files**
-- Added `.github/workflows/ci.yml`, `scripts/smoke_test.py`.
-- Updated `README.md`, `DEPLOYMENT.md`, `DEVELOPMENT_CHECKLIST.md`, `ACCEPTANCE_CRITERIA.md`, `PHASE_LOG.md`.
+- Added `scripts/prepare_model.py`, `tests/test_prepare_model.py`.
+- Updated `pyproject.toml`, `requirements.lock`, `docker-compose.yml`, `.env.example`, `.github/workflows/ci.yml`, `scripts/smoke_test.py`, `src/modelserve/dataset.py`, `src/modelserve/database.py`, `alembic/env.py`, `tests/test_dataset.py`, `README.md`, `DEPLOYMENT.md`, `DEVELOPMENT_CHECKLIST.md`, `ACCEPTANCE_CRITERIA.md`.
 
-**Commands**
-- `pytest -ra` — 54 passed, 11 warnings in 3.99s.
-- `python -m compileall -q src tests` — exit 0.
-- `docker compose config` — exit 0.
+**Commands and Results**
+- `pytest -ra` — 56 passed, 11 warnings in 4.28s.
+- `python -m compileall -q src tests scripts` — exit 0.
+- `python -m pip check` — exit 0 ("No broken requirements found.").
+- `docker build -f Dockerfile.api -t modelserve-api:test .` — exit 0.
+- `docker build -f Dockerfile.dashboard -t modelserve-dashboard:test .` — exit 0.
+- `python scripts/prepare_model.py --output artifacts/models` — exit 0; trained on 7,043 rows, generated and verified `telco-churn-20261028T134108Z`.
+- `docker compose up -d --build` — exit 0; postgres, api, and dashboard running healthy.
+- `curl.exe http://127.0.0.1:8000/health/ready` — HTTP 200 `{"status":"ready","model_version":"telco-churn-20261028T134108Z","database_connected":true}`.
+- `curl.exe http://127.0.0.1:8501/_stcore/health` — HTTP 200 `ok`.
+- `python scripts/smoke_test.py --url http://127.0.0.1:8000 --dashboard-url http://127.0.0.1:8501` — exit 0; all 7 steps passed.
 
-**Tests and verification**
-- 54 automated tests across 5 test modules passing.
-- Test coverage spans dataset parsing, reproducible training, strict manifest security, API validation and limits, logging sanitization, database persistence, monitoring queries, and resilient failure paths.
+**Limitations / defects**
+- Tested and verified on local Docker Compose stack; no external public cloud deployment was performed.
+- Model trained on fictional IBM Telco sample dataset; probability scores are uncalibrated.
+
+**Git**
+- Working tree clean and ready for user review prior to commit/push per AGENTS.md Rule 14.
+

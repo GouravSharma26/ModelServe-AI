@@ -60,8 +60,13 @@ def _parse_csv(content: bytes) -> pd.DataFrame:
     _validate_columns(frame)
 
     for column in NUMERIC_COLUMNS:
-        converted = pd.to_numeric(frame[column], errors="coerce")
-        malformed = frame[column].notna() & converted.isna()
+        series = frame[column]
+        if series.dtype == object or pd.api.types.is_string_dtype(series):
+            cleaned = series.astype(str).str.strip().replace("", float("nan"))
+        else:
+            cleaned = series
+        converted = pd.to_numeric(cleaned, errors="coerce")
+        malformed = cleaned.notna() & converted.isna()
         if malformed.any():
             raise DatasetValidationError(f"Column '{column}' must contain numeric values")
         frame[column] = converted
@@ -84,8 +89,12 @@ def validate_dataset(frame: pd.DataFrame) -> None:
         raise DatasetValidationError("Target 'Churn' must contain exactly the labels 'Yes' and 'No'")
     for column in NUMERIC_COLUMNS:
         original = frame[column]
-        converted = pd.to_numeric(original, errors="coerce")
-        if converted[original.notna()].isna().any():
+        if original.dtype == object or pd.api.types.is_string_dtype(original):
+            cleaned = original.astype(str).str.strip().replace("", float("nan"))
+        else:
+            cleaned = original
+        converted = pd.to_numeric(cleaned, errors="coerce")
+        if converted[cleaned.notna()].isna().any():
             raise DatasetValidationError(f"Column '{column}' must contain numeric values")
         if column != "TotalCharges" and converted.isna().any():
             raise DatasetValidationError(f"Column '{column}' cannot contain missing values")

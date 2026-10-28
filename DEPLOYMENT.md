@@ -3,7 +3,7 @@
 ## Supported delivery stages
 1. Local virtual environment development.
 2. Multi-container Docker Compose deployment (PostgreSQL 16, FastAPI inference, Streamlit dashboard).
-3. GitHub Actions CI pipeline.
+3. GitHub Actions CI pipeline with automated container builds and smoke testing.
 
 ## Prerequisites
 - Git
@@ -17,6 +17,13 @@ python -m venv .venv
 python -m pip install -r requirements.lock
 python -m pip install --no-deps -e .
 ```
+
+### Reproducible model preparation
+Before starting inference services or Docker Compose from a clean checkout, prepare the verified model artifact:
+```powershell
+python scripts/prepare_model.py --output artifacts/models
+```
+This runs the validated training pipeline, computes cryptographic SHA-256 digests, and generates `model.joblib`, `manifest.json`, and `evaluation.json` in `artifacts/models/<version>`.
 
 ### Running database migrations locally
 ```powershell
@@ -42,33 +49,51 @@ Copy `.env.example` to `.env`:
 ```powershell
 Copy-Item .env.example .env
 ```
+Key configuration parameters:
+- `POSTGRES_USER`: PostgreSQL username (default: `modelserve_user`).
+- `POSTGRES_PASSWORD`: PostgreSQL password (configure a strong non-default secret for non-local deployments).
+- `POSTGRES_DB`: Database name (default: `modelserve_db`).
+- `POSTGRES_PORT_BINDING`: Host bind address (default `127.0.0.1:5432` prevents exposing the database externally).
+- `API_PORT_BINDING`: API host bind address (default `127.0.0.1:8000`).
+- `DASHBOARD_PORT_BINDING`: Dashboard host bind address (default `127.0.0.1:8501`).
 
-### 2. Startup
+### 2. Model artifact preparation
+Ensure the model artifact is generated in the mounted `artifacts/models` folder before starting the stack:
+```powershell
+python scripts/prepare_model.py --output artifacts/models
+```
+
+### 3. Startup
 ```powershell
 # Build container images and start services in the background
 docker compose up -d --build
 ```
 
-### 3. Verify services and health status
+### 4. Health probes: Liveness vs Readiness
+- **Liveness probe (`/health/live`):** Verifies that the FastAPI process is responsive. Used by Docker Compose to ensure the container is functioning.
+- **Readiness probe (`/health/ready`):** Verifies that a cryptographically verified model artifact is actively loaded in memory and confirms PostgreSQL connectivity. If model artifacts are missing or unverified, `/health/ready` returns HTTP 503 while `/health/live` remains HTTP 200.
+- **Streamlit dashboard probe (`/_stcore/health`):** Verifies that the Streamlit server is active and serving UI sessions.
+
+### 5. Verify services and health status
 ```powershell
 docker compose ps
 ```
-All three services should show `healthy`:
-- `postgres`: PostgreSQL 16 on port 5432 with named volume `postgres_data`.
+All three services should report `healthy`:
+- `postgres`: PostgreSQL 16 on port 5432 with volume `postgres_data`.
 - `api`: FastAPI on port 8000 (applies migrations and serves predictions).
 - `dashboard`: Streamlit dashboard on port 8501.
 
-### 4. Run automated smoke test
+### 6. Run automated smoke test
 ```powershell
-python scripts/smoke_test.py --url http://localhost:8000
+python scripts/smoke_test.py --url http://127.0.0.1:8000 --dashboard-url http://127.0.0.1:8501
 ```
 
-### 5. Accessing interfaces
+### 7. Accessing interfaces
 - API interactive docs: `http://localhost:8000/docs`
 - Health check: `http://localhost:8000/health/ready`
 - Monitoring dashboard: `http://localhost:8501`
 
-### 6. Teardown
+### 8. Teardown
 ```powershell
 docker compose down
 # To clean up persisted data volume as well:

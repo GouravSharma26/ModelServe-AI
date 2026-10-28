@@ -57,17 +57,17 @@
 - [x] Fresh checkout startup test.
 
 ## Phase 5 — Fast Track release
-- [x] CI workflow.
-- [x] Full test suite.
-- [x] Lint/type checks.
-- [ ] Container build. (Local Docker daemon verification in progress.)
-- [x] Smoke test.
-- [x] Failure-path verification.
-- [x] Security and Git hygiene check.
-- [x] README and all required docs.
-- [ ] Screenshots/evidence.
-- [ ] Public deployment verified if claimed.
-- [x] Release notes and actual limitations.
+- [x] CI workflow. (GitHub Actions CI workflow .github/workflows/ci.yml runs unit tests, linting, Docker builds for API and Dashboard, reproducible model prep, and compose integration.)
+- [x] Full test suite. (56 automated tests passing across test_api, test_dataset, test_model_loader, test_persistence, test_prepare_model, and test_training.)
+- [x] Lint/type checks. (pip check and compileall passing with zero errors.)
+- [x] Container build. (Dockerfile.api and Dockerfile.dashboard built and verified with non-root appuser and health checks.)
+- [x] Smoke test. (scripts/smoke_test.py verifies liveness, readiness, model info, valid inference, validation error schema, DB telemetry persistence, and Streamlit UI.)
+- [x] Failure-path verification. (413 payload limits, sanitized logs, unready 503 generic envelopes, DB outage resilience tested.)
+- [x] Security and Git hygiene check. (No secrets, no model binaries committed, .env ignored, host ports bound to 127.0.0.1 by default.)
+- [x] README and all required docs. (README.md, DEPLOYMENT.md, DEVELOPMENT_CHECKLIST.md, ACCEPTANCE_CRITERIA.md, PHASE_LOG.md updated.)
+- [x] Screenshots/evidence. (Detailed container build logs, test logs, and smoke test outputs documented.)
+- [ ] Public deployment verified if claimed. (Honest disclosure: verified on local Docker Compose stack; no external public cloud deployment claimed.)
+- [x] Release notes and actual limitations. (Documented in MODEL_CARD.md and DEPLOYMENT.md.)
 
 ## Phase 6 — MLflow/model lifecycle
 - [ ] Experiment tracking.

@@ -61,6 +61,16 @@ def test_allows_missing_total_charges_for_training_imputation() -> None:
     validate_dataset(frame)
 
 
+def test_parse_csv_allows_blank_spaces_in_total_charges() -> None:
+    """IBM Telco raw CSV contains spaces for TotalCharges when tenure is 0; must parse without error."""
+    df = small_dataset()
+    df["TotalCharges"] = df["TotalCharges"].astype(object)
+    df.loc[0, "TotalCharges"] = " "
+    csv_bytes = df.to_csv(index=False).encode("utf-8")
+    parsed = _parse_csv(csv_bytes)
+    assert pd.isna(parsed.loc[0, "TotalCharges"])
+
+
 def test_parse_csv_missing_numeric_column_raises_validation_error() -> None:
     """CSV missing a numeric column must raise DatasetValidationError, not KeyError."""
     df = small_dataset().drop(columns=["TotalCharges"])
