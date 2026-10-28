@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.pytest-tmp/
+.ruff_cache/
+*.py[cod]
+*.egg-info/
+.env
+.env.*
+!.env.example
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+artifacts/*
+!artifacts/.gitkeep
+*.log
