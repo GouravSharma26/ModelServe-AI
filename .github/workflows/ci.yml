@@ -37,7 +37,7 @@ jobs:
 
       - name: Run automated test suite
         run: |
-          pytest -ra
+          python -m pytest -ra
 
       - name: Validate Docker Compose configuration
         run: |
