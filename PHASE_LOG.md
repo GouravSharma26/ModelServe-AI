@@ -97,59 +97,8 @@ No implementation status is assumed by this documentation package. Antigravity m
 **Phase 0 addendum — dataset decision finalization**
 - The first pass selected UCI Bank Marketing while Telco licensing was still unverified. Before Phase 1 completion, the official IBM `telco-customer-churn-on-icp4d` repository was checked: it includes an Apache-2.0 LICENSE and `data/Telco-Customer-Churn.csv`; the source header and sample rows were read. The CSV SHA-256 from the official GitHub file response matches the bytes downloaded for training (`16320c9c1ec72448db59aa0a26a0b95401046bef5d02fd3aeb906448e3055e91`). ADR-003 now retains the documented Telco use case. The superseded UCI training artifacts were removed.
 
-### 2026-10-28 — Phase 2: FastAPI inference vertical slice
+### 2026-10-28 — Phase 1: Reproducible ML pipeline
 **Status:** DONE
-
-**Summary**
-- Configured clean virtual environment `.venv` with `ensurepip`, installed pinned dependencies, and resolved earlier dependency isolation blockers (`pip check` reports 0 broken requirements).
-- Built trusted model loader (`model_loader.py`) with manifest validation, SHA-256 integrity verification, and safe scikit-learn Pipeline deserialization.
-- Defined Pydantic schemas (`schemas.py`) for all 19 customer features with type constraints, categorical validation, and `extra = "forbid"` schema policy.
-- Created FastAPI application (`app.py`, `settings.py`) with single-record inference (`POST /v1/predictions`), model provenance metadata (`GET /v1/model/info`), process liveness (`GET /health/live`), and service readiness (`GET /health/ready`).
-- Added request ID tracking middleware (`RequestIDMiddleware`), payload size guard (`PayloadLimitMiddleware`, 64 KB limit returning HTTP 413), access timing middleware (`AccessLoggingMiddleware`), structured JSON logging (`logging.py`), and sanitized error envelopes (`ErrorResponse`) ensuring no stack traces or internal secrets leak to clients.
-- Implemented and verified 21 new automated tests across model loading, integrity verification, tampering rejection, and API behaviors (total 34 tests passing). Exercised live Uvicorn server and real HTTP responses on localhost.
-
-**Files**
-- Added `src/modelserve/settings.py`, `src/modelserve/model_loader.py`, `src/modelserve/schemas.py`, `src/modelserve/logging.py`, `src/modelserve/middleware.py`, `src/modelserve/app.py`, `tests/test_model_loader.py`, `tests/test_api.py`, `.env.example`.
-- Updated `pyproject.toml`, `requirements.lock`, `API_GUIDE.md`, `README.md`, `DECISIONS.md`, `DEVELOPMENT_CHECKLIST.md`, `ACCEPTANCE_CRITERIA.md`, `PHASE_LOG.md`.
-
-**Commands**
-- `.\.venv\Scripts\python.exe -m ensurepip` — exit 0; installed pip 24.2.
-- `.\.venv\Scripts\python.exe -m pip install -r requirements.lock` — exit 0; installed locked packages.
-- `.\.venv\Scripts\python.exe -m pip install fastapi uvicorn httpx` — exit 0.
-- `.\.venv\Scripts\python.exe -m pip install -e . --no-deps` — exit 0.
-- `.\.venv\Scripts\python.exe -m pip check` — exit 0; "No broken requirements found."
-- `.\.venv\Scripts\python.exe -m compileall -q src tests` — exit 0.
-- `.\.venv\Scripts\python.exe -m pytest -q --basetemp=.pytest-tmp` — 34 passed, 8 warnings.
-- `.\.venv\Scripts\python.exe -m uvicorn modelserve.app:app --host 127.0.0.1 --port 8008` — started live daemon; verified `/health/live`, `/health/ready`, `/v1/model/info`, and `/v1/predictions` with real HTTP calls.
-
-**Tests and verification**
-- Unit & schema tests: 34 passed (13 dataset/training tests, 6 model loader/integrity tests, 15 API tests).
-- Integration tests: Live HTTP client requests against running Uvicorn server verified `/health/live` (200), `/health/ready` (200), `/v1/model/info` (200 with complete metrics), `/v1/predictions` (200 with label "Yes" and score 0.8084), and 422 validation failure with exact structured envelope.
-- Negative tests: Missing fields (422), invalid categories (422), negative tenure (422), forbidden extra fields (422), oversized payloads (413), tampered artifact binary (ArtifactIntegrityError), unready model (503), unhandled exception (500 without leaking stack traces).
-
-**Evidence**
-- Live test execution: 34 passed in 3.23s.
-- Clean virtual environment check: `pip check` reports no broken requirements.
-- Live sample prediction response: `{"request_id": "req_49ab79f4ba484f75", "model": {"name": "logistic_regression", "version": "telco-churn-20261028T120929Z"}, "prediction": {"label": "Yes", "score": 0.8084168318530464}, "status": "success"}`.
-
-**Limitations / defects**
-- In-memory inference only; PostgreSQL persistence for prediction events and model metadata is planned for Phase 3.
-- Streamlit dashboard, Docker Compose multi-container setup, and GitHub Actions CI remain planned for Phases 4 and 5.
-- Workspace is not yet a Git repository; branch and commit SHA unavailable.
-
-**Human action required**
-- None to proceed with Phase 3.
-
-**Git**
-- Branch: unavailable (not a Git repository).
-- `git status`: failed with “fatal: not a git repository”.
-- Commit SHA: none.
-
-**Resume readiness**
-- NOT READY. Phases 1 and 2 are complete, tested, and verified against live HTTP endpoints, but PostgreSQL persistence, dashboard, Docker Compose, CI, and end-to-end smoke tests remain incomplete.
-
-**Next phase**
-- Phase 3: PostgreSQL persistence (SQLAlchemy models, Alembic migrations, prediction event telemetry, model version records, and database integration tests).
 
 **Summary**
 - Implemented a loader for IBM's Telco Customer Churn CSV with exact source-column, target, required-value, and numeric validation. `TotalCharges` blanks are allowed and handled within the fitted preprocessing pipeline.
@@ -204,3 +153,62 @@ No implementation status is assumed by this documentation package. Antigravity m
 
 **Next phase**
 - Phase 2: FastAPI inference vertical slice using the versioned trusted artifact and its feature schema.
+
+### 2026-10-28 — Phase 2: FastAPI inference vertical slice
+**Status:** DONE
+
+**Summary**
+- Configured clean virtual environment `.venv` with `ensurepip`, installed pinned dependencies, and resolved earlier dependency isolation blockers (`pip check` reports 0 broken requirements).
+- Built trusted model loader (`model_loader.py`) with manifest validation, SHA-256 integrity verification, and safe scikit-learn Pipeline deserialization.
+- Defined Pydantic schemas (`schemas.py`) for all 19 customer features with type constraints, categorical validation, and `extra = "forbid"` schema policy.
+- Created FastAPI application (`app.py`, `settings.py`) with single-record inference (`POST /v1/predictions`), model provenance metadata (`GET /v1/model/info`), process liveness (`GET /health/live`), and service readiness (`GET /health/ready`).
+- Added request ID tracking middleware (`RequestIDMiddleware`), payload size guard (`PayloadLimitMiddleware`, 64 KB limit returning HTTP 413), access timing middleware (`AccessLoggingMiddleware`), structured JSON logging (`logging.py`), and sanitized error envelopes (`ErrorResponse`) ensuring no stack traces or internal secrets leak to clients.
+- Implemented and verified 21 new automated tests across model loading, integrity verification, tampering rejection, and API behaviors (total 34 tests passing). Exercised live Uvicorn server and real HTTP responses on localhost.
+- Initialized local Git repository on branch `main`, connected remote `origin` (`https://github.com/GouravSharma26/ModelServe-AI.git`), committed code, and pushed to GitHub.
+
+**Files**
+- Added `src/modelserve/settings.py`, `src/modelserve/model_loader.py`, `src/modelserve/schemas.py`, `src/modelserve/logging.py`, `src/modelserve/middleware.py`, `src/modelserve/app.py`, `tests/test_model_loader.py`, `tests/test_api.py`, `.env.example`, `artifacts/.gitkeep`.
+- Updated `pyproject.toml`, `requirements.lock`, `API_GUIDE.md`, `README.md`, `DECISIONS.md`, `DEVELOPMENT_CHECKLIST.md`, `ACCEPTANCE_CRITERIA.md`, `PHASE_LOG.md`, `.gitignore`.
+
+**Commands**
+- `.\.venv\Scripts\python.exe -m ensurepip` — exit 0; installed pip 24.2.
+- `.\.venv\Scripts\python.exe -m pip install -r requirements.lock` — exit 0; installed locked packages.
+- `.\.venv\Scripts\python.exe -m pip install fastapi uvicorn httpx` — exit 0.
+- `.\.venv\Scripts\python.exe -m pip install -e . --no-deps` — exit 0.
+- `.\.venv\Scripts\python.exe -m pip check` — exit 0; "No broken requirements found."
+- `.\.venv\Scripts\python.exe -m compileall -q src tests` — exit 0.
+- `.\.venv\Scripts\python.exe -m pytest -q --basetemp=.pytest-tmp` — 34 passed, 8 warnings.
+- `.\.venv\Scripts\python.exe -m uvicorn modelserve.app:app --host 127.0.0.1 --port 8008` — started live daemon; verified `/health/live`, `/health/ready`, `/v1/model/info`, and `/v1/predictions` with real HTTP calls.
+- `git init -b main` — initialized empty Git repository.
+- `git commit -m "feat: complete Phase 1 training pipeline and Phase 2 FastAPI inference service"` — committed initial 37 files (SHA `8d89980`).
+- `git remote add origin https://github.com/GouravSharma26/ModelServe-AI.git` — added origin remote.
+- `git push -u origin main` — pushed branch `main` to GitHub.
+
+**Tests and verification**
+- Unit & schema tests: 34 passed (13 dataset/training tests, 6 model loader/integrity tests, 15 API tests).
+- Integration tests: Live HTTP client requests against running Uvicorn server verified `/health/live` (200), `/health/ready` (200), `/v1/model/info` (200 with complete metrics), `/v1/predictions` (200 with label "Yes" and score 0.8084), and 422 validation failure with exact structured envelope.
+- Negative tests: Missing fields (422), invalid categories (422), negative tenure (422), forbidden extra fields (422), oversized payloads (413), tampered artifact binary (ArtifactIntegrityError), unready model (503), unhandled exception (500 without leaking stack traces).
+
+**Evidence**
+- Live test execution: 34 passed in 3.23s.
+- Clean virtual environment check: `pip check` reports no broken requirements.
+- Live sample prediction response: `{"request_id": "req_49ab79f4ba484f75", "model": {"name": "logistic_regression", "version": "telco-churn-20261028T120929Z"}, "prediction": {"label": "Yes", "score": 0.8084168318530464}, "status": "success"}`.
+- Git push output: `branch 'main' set up to track 'origin/main'`.
+
+**Limitations / defects**
+- In-memory inference only; PostgreSQL persistence for prediction events and model metadata is planned for Phase 3.
+- Streamlit dashboard, Docker Compose multi-container setup, and GitHub Actions CI remain planned for Phases 4 and 5.
+
+**Human action required**
+- None. Changes are committed and pushed to GitHub.
+
+**Git**
+- Branch: `main` (tracking `origin/main`)
+- `git status`: clean
+- Commit SHA: `8d89980`
+
+**Resume readiness**
+- NOT READY. Phases 1 and 2 are complete, tested, and verified against live HTTP endpoints, but PostgreSQL persistence, dashboard, Docker Compose, CI, and end-to-end smoke tests remain incomplete.
+
+**Next phase**
+- Phase 3: PostgreSQL persistence (SQLAlchemy models, Alembic migrations, prediction event telemetry, model version records, and database integration tests).
