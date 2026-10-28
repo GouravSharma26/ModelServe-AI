@@ -109,3 +109,69 @@ docker compose down -v
 | `alembic upgrade head` fails | Mismatched database URL or table conflict | Verify `DATABASE_URL` matches PostgreSQL container credentials. |
 | Dashboard shows 0 predictions | Clean database state (empty window) | Expected empty state behavior. Send test requests via `/v1/predictions` or the dashboard Playground tab. |
 | Port conflict (8000 or 8501) | Port already occupied on host | Override port bindings in `.env` (`MODELSERVE_PORT=8001`) or adjust `docker-compose.yml`. |
+
+---
+
+## Cloud Production Deployment (Neon + Render + Vercel)
+
+### Architecture Overview
+- **Database (Neon PostgreSQL):** Serverless PostgreSQL storing prediction telemetry and registered model versions.
+- **Backend (Render):** Dockerized FastAPI inference engine executing reproducible models, checking schemas, and recording telemetry.
+- **Frontend (Vercel):** React + Vite dashboard delivering real-time predictions, telemetry analytics, and model evaluation metrics over global CDN.
+
+```
++--------------------+        REST JSON (CORS)       +-----------------------+
+|  Vercel Frontend   |  -------------------------->  |   Render API Service  |
+|   (React + Vite)   |  <--------------------------  |   (FastAPI + Model)   |
++--------------------+                               +-----------------------+
+                                                                 |
+                                                          SQLAlchemy (TLS)
+                                                                 v
+                                                     +-----------------------+
+                                                     |    Neon PostgreSQL    |
+                                                     |  (Serverless Storage) |
+                                                     +-----------------------+
+```
+
+### Step 1: Provision Neon PostgreSQL
+1. Create a project at [Neon.tech](https://neon.tech).
+2. Copy the connection string from the Neon dashboard. It will look like:
+   `postgresql://neondb_owner:***@ep-***.us-east-2.aws.neon.tech/neondb?sslmode=require`
+3. The backend normalizes `postgresql://` to `postgresql+psycopg2://` automatically.
+
+### Step 2: Deploy Backend to Render
+1. Push this repository to GitHub.
+2. In the [Render Dashboard](https://dashboard.render.com), click **New +** -> **Web Service**.
+3. Connect your GitHub repository `ModelServe-AI`.
+4. Configure service settings:
+   - **Environment:** `Docker` (or select `render.yaml` Blueprint)
+   - **Dockerfile Path:** `Dockerfile.api` (or `Dockerfile`)
+   - **Health Check Path:** `/health/live`
+5. Add Environment Variables:
+   - `DATABASE_URL`: Your Neon PostgreSQL connection string.
+   - `CORS_ORIGINS`: `*` (or your Vercel URL e.g. `https://your-app.vercel.app,http://localhost:5173`)
+   - `MODELSERVE_MAX_PAYLOAD_BYTES`: `65536`
+6. Click **Deploy Web Service**.
+   - During build, `Dockerfile.api` trains and packages the reproducible model artifact.
+   - On startup, `scripts/docker-entrypoint.sh` executes Alembic migrations (`alembic upgrade head`), verifies model integrity, binds to Render's dynamic `$PORT`, and starts serving.
+7. Verify deployment:
+   - Check Liveness: `GET https://your-render-service.onrender.com/health/live`
+   - Check Readiness: `GET https://your-render-service.onrender.com/health/ready` (confirms model loaded & database connected)
+   - Check Docs: `GET https://your-render-service.onrender.com/docs`
+
+### Step 3: Deploy Frontend to Vercel
+1. In the [Vercel Dashboard](https://vercel.com), click **Add New...** -> **Project**.
+2. Select your `ModelServe-AI` GitHub repository.
+3. In Project Configuration:
+   - **Framework Preset:** `Vite`
+   - **Root Directory:** Edit to select `frontend` (or leave root since `vercel.json` is configured).
+   - **Build Command:** `npm run build`
+   - **Output Directory:** `dist`
+4. Add Environment Variable:
+   - `VITE_API_BASE_URL`: `https://your-render-service.onrender.com`
+5. Click **Deploy**.
+6. Open your Vercel URL:
+   - System Status will show `API Process: Alive` and `Inference Engine: Ready to Serve`.
+   - Test predictions via the **Prediction Playground**.
+   - Inspect aggregated metrics and latency profiles in **Live Telemetry**.
+

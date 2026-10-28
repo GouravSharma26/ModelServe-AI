@@ -11,6 +11,7 @@ from typing import Any
 import pandas as pd
 from fastapi import FastAPI, HTTPException, Query, Request, status
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -77,6 +78,9 @@ async def lifespan(app: FastAPI):
             if settings.database_url.startswith("sqlite"):
                 init_db(engine)
             app.state.db_connected = check_database_connection(engine)
+            if app.state.db_connected:
+                # Ensure schema exists on startup if database is available
+                init_db(engine)
             logger.info("Database connection initialized. Connected: %s", app.state.db_connected)
         except Exception as exc:
             logger.warning("Database setup failed: %s", exc)
@@ -148,6 +152,27 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(AccessLoggingMiddleware)
     app.add_middleware(PayloadLimitMiddleware, max_payload_bytes=app_settings.max_payload_bytes)
     app.add_middleware(RequestIDMiddleware)
+
+    cors_origins = app_settings.cors_origins
+    has_wildcard = "*" in cors_origins or any("*" in o for o in cors_origins)
+    if has_wildcard:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=["*"],
+            allow_credentials=False,
+            allow_methods=["*"],
+            allow_headers=["*"],
+            expose_headers=["X-Request-ID"],
+        )
+    else:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=cors_origins,
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+            expose_headers=["X-Request-ID"],
+        )
 
     # --------------------------------------------------------------------------
     # Exception Handlers

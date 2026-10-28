@@ -51,3 +51,9 @@ Update this file when a decision changes. Do not silently change decisions that 
 **Decision:** Enforce Pydantic validation with `extra = "forbid"` for all inference features, require SHA-256 checksum verification against `manifest.json` prior to deserializing any joblib model artifact, and distinguish `/health/live` (process health) from `/health/ready` (model and dependency readiness).
 **Reason:** Prevents schema drift and silent feature degradation, mitigates untrusted deserialization risks by verifying provenance and integrity, and enables proper orchestrator startup lifecycle handling.
 **Consequences:** Payloads with missing, misspelled, or extra attributes fail with standard 422 envelopes. Tampered or missing artifacts return HTTP 503 on `/health/ready` and inference routes while leaving the service process alive for diagnosis.
+
+## ADR-011: Cloud deployment architecture (Neon, Render, Vercel)
+**Decision:** ModelServe AI targets serverless/managed cloud tiers for public deployment: Neon PostgreSQL for telemetry storage, Render Web Service for Dockerized FastAPI inference and reproducible model execution, and Vercel for React + Vite dashboard hosting.
+**Reason:** Streamlit is suited for local prototyping but is not natively compatible with serverless Edge/CDN hosting on Vercel. A React + Vite dashboard consuming CORS-enabled REST endpoints provides snappy client-side responsiveness, mobile layout, and zero-maintenance global CDN delivery.
+**Consequences:** Backend supports configurable CORS (`CORS_ORIGINS`) and dynamic port binding (`$PORT`); frontend uses `VITE_API_BASE_URL` with runtime override capability; Docker builds generate self-contained reproducible models for container platforms without volume mounts.
+

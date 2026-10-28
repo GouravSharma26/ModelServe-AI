@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: modelserve-api
+    runtime: docker
+    dockerfilePath: Dockerfile.api
+    plan: free
+    region: oregon
+    healthCheckPath: /health/live
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: MODELSERVE_MAX_PAYLOAD_BYTES
+        value: "65536"
+      - key: CORS_ORIGINS
+        value: "*"
+

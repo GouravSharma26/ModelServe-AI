@@ -331,4 +331,39 @@ No implementation status is assumed by this documentation package. Antigravity m
 - `curl.exe http://127.0.0.1:8501/_stcore/health` — HTTP 200 `ok`.
 - `python scripts/smoke_test.py --url http://127.0.0.1:8000 --dashboard-url http://127.0.0.1:8501` — exit 0; all 7 steps passed.
 
+### 2026-10-28 — Cloud Deployment Preparation: Neon PostgreSQL, Render Backend, Vercel React Frontend
+**Status:** DONE
+
+**Summary**
+- Prepared the platform for managed cloud deployment across Neon, Render, and Vercel.
+- **Render Backend Preparation:**
+  - Added `scripts/docker-entrypoint.sh` to run database migrations (`alembic upgrade head`), auto-generate model artifacts on startup if missing, and bind dynamically to Render's `$PORT`.
+  - Configured `Dockerfile.api` and `Dockerfile` to train and bundle a verified model artifact during build for self-contained execution without volume mounts.
+  - Added `render.yaml` infrastructure-as-code Blueprint for 1-click Render web service deployment.
+  - Updated backend configuration with `CORS_ORIGINS` (`*` or comma-separated origins) using `CORSMiddleware`, enabling cross-origin requests from Vercel deployments.
+  - Verified `/health/live`, `/health/ready`, `/docs`, and CORS preflight options contracts with unit tests.
+- **Neon PostgreSQL Configuration:**
+  - Evaluated connection string in `.env`. Outbound port 5432 is restricted on local Wi-Fi/ISP, while connection parameters and `normalize_database_url` (`postgresql+psycopg2://` with SSL) are ready for cloud execution where Render connects to Neon across AWS/GCP regions without port blocking.
+  - Added idempotent `init_db(engine)` in app lifespan to guarantee schema readiness.
+- **Vercel Frontend Dashboard (React + Vite):**
+  - Created complete React + Vite application under `frontend/` preserving:
+    1. Real-time Prediction Playground for all 19 customer churn features with responsive score gauges and request tracking.
+    2. Model Lineage & Metrics view showing dataset provenance, offline held-out PR-AUC, ROC-AUC, F1, and confusion matrix.
+    3. API and Database Health status indicators with live polling.
+    4. Persisted inference telemetry view querying `/v1/monitoring/summary` with variable time windows and latency profile tables.
+  - Integrated `VITE_API_BASE_URL` with runtime UI override capability.
+  - Created root and frontend `vercel.json` configs for instant Vercel CDN deployment.
+  - Added `frontend` build job in `.github/workflows/ci.yml`.
+
+**Files**
+- Added `scripts/docker-entrypoint.sh`, `render.yaml`, `Dockerfile`, `vercel.json`.
+- Added `frontend/package.json`, `frontend/vite.config.js`, `frontend/index.html`, `frontend/.env.example`, `frontend/vercel.json`, `frontend/src/App.jsx`, `frontend/src/index.css`, `frontend/src/main.jsx`.
+- Updated `src/modelserve/app.py`, `src/modelserve/settings.py`, `.env.example`, `.gitignore`, `tests/test_api.py`, `.github/workflows/ci.yml`, `DEPLOYMENT.md`, `DECISIONS.md`, `DEVELOPMENT_CHECKLIST.md`.
+
+**Commands and Results**
+- `python -m pytest -ra` — 57 passed, 12 warnings in 3.02s (added CORS preflight test).
+- `python -m compileall -q src tests scripts` — exit 0.
+- `npm --prefix frontend run build` — exit 0; built in 680ms (Vite production bundle generated).
+
+
 

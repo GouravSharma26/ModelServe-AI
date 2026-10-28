@@ -230,3 +230,30 @@ def test_safe_500_error_handling(isolated_artifacts_dir: Path, sample_features: 
         assert "request_id" in data["error"]
         assert "secret_pw_123" not in response.text
         assert "Traceback" not in response.text
+
+
+def test_cors_preflight_and_headers(client: TestClient) -> None:
+    """Verify that CORS preflight and response headers allow cross-origin requests."""
+    # 1. Preflight OPTIONS request
+    headers = {
+        "Origin": "https://modelserve-frontend.vercel.app",
+        "Access-Control-Request-Method": "POST",
+        "Access-Control-Request-Headers": "Content-Type,X-Request-ID",
+    }
+    options_res = client.options("/v1/predictions", headers=headers)
+    assert options_res.status_code == 200
+    assert options_res.headers.get("access-control-allow-origin") in (
+        "*",
+        "https://modelserve-frontend.vercel.app",
+    )
+    assert "POST" in options_res.headers.get("access-control-allow-methods", "")
+
+    # 2. GET /health/live with Origin header
+    get_res = client.get("/health/live", headers={"Origin": "https://modelserve-frontend.vercel.app"})
+    assert get_res.status_code == 200
+    assert get_res.headers.get("access-control-allow-origin") in (
+        "*",
+        "https://modelserve-frontend.vercel.app",
+    )
+    assert "X-Request-ID" in get_res.headers.get("access-control-expose-headers", "")
+

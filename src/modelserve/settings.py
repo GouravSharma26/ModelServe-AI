@@ -18,7 +18,9 @@ class Settings:
         default_factory=lambda: os.getenv("MODELSERVE_HOST", "0.0.0.0").strip()
     )
     port: int = field(
-        default_factory=lambda: int(os.getenv("MODELSERVE_PORT", "8000").strip())
+        default_factory=lambda: int(
+            os.getenv("PORT", os.getenv("MODELSERVE_PORT", "8000")).strip()
+        )
     )
     log_level: str = field(
         default_factory=lambda: os.getenv("MODELSERVE_LOG_LEVEL", "INFO").strip().upper()
@@ -42,6 +44,16 @@ class Settings:
         default_factory=lambda: (
             os.getenv("DATABASE_URL", "").strip() or None
         )
+    )
+    cors_origins: list[str] = field(
+        default_factory=lambda: [
+            origin.strip()
+            for origin in os.getenv(
+                "CORS_ORIGINS",
+                "*",
+            ).split(",")
+            if origin.strip()
+        ]
     )
     model_name: str = "customer-churn-classifier"
 
