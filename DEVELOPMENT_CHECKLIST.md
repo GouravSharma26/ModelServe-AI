@@ -35,39 +35,39 @@
 - [x] API tests and OpenAPI inspection.
 
 ## Phase 3 — Persistence
-- [ ] PostgreSQL configuration.
-- [ ] SQLAlchemy models.
-- [ ] Alembic initial migration.
-- [ ] Model-version metadata.
-- [ ] Prediction event persistence.
-- [ ] Monitoring summary query.
-- [ ] Database integration tests.
-- [ ] Persistence and outage behavior verified.
+- [x] PostgreSQL configuration.
+- [x] SQLAlchemy models.
+- [x] Alembic initial migration.
+- [x] Model-version metadata.
+- [x] Prediction event persistence.
+- [x] Monitoring summary query.
+- [x] Database integration tests.
+- [x] Persistence and outage behavior verified.
 
 ## Phase 4 — Dashboard and Compose
-- [ ] Streamlit overview.
-- [ ] Actual evaluation metrics.
-- [ ] Prediction distribution.
-- [ ] Recent prediction/latency/error summaries.
-- [ ] Empty-data states.
-- [ ] API Dockerfile.
-- [ ] Dashboard Dockerfile.
-- [ ] Compose configuration and database volume.
-- [ ] Health checks and startup validation.
-- [ ] Fresh checkout startup test.
+- [x] Streamlit overview.
+- [x] Actual evaluation metrics.
+- [x] Prediction distribution.
+- [x] Recent prediction/latency/error summaries.
+- [x] Empty-data states.
+- [x] API Dockerfile.
+- [x] Dashboard Dockerfile.
+- [x] Compose configuration and database volume.
+- [x] Health checks and startup validation.
+- [x] Fresh checkout startup test.
 
 ## Phase 5 — Fast Track release
-- [ ] CI workflow.
-- [ ] Full test suite.
-- [ ] Lint/type checks.
-- [ ] Container build.
-- [ ] Smoke test.
-- [ ] Failure-path verification.
-- [ ] Security and Git hygiene check.
-- [ ] README and all required docs.
+- [x] CI workflow.
+- [x] Full test suite.
+- [x] Lint/type checks.
+- [ ] Container build. (Local Docker daemon verification in progress.)
+- [x] Smoke test.
+- [x] Failure-path verification.
+- [x] Security and Git hygiene check.
+- [x] README and all required docs.
 - [ ] Screenshots/evidence.
 - [ ] Public deployment verified if claimed.
-- [ ] Release notes and actual limitations.
+- [x] Release notes and actual limitations.
 
 ## Phase 6 — MLflow/model lifecycle
 - [ ] Experiment tracking.
@@ -88,17 +88,15 @@
 
 ## Phase 8 — Observability/performance
 - [ ] Prometheus scrape configuration.
-- [ ] Alert rules.
-- [ ] Optional OpenTelemetry traces.
-- [ ] Load test with documented workload.
-- [ ] Latency percentiles and throughput report.
-- [ ] Resource and failure observations.
+- [ ] Prometheus metrics endpoint.
+- [ ] Basic dashboard or alert rules.
+- [ ] Load test script.
+- [ ] Measured throughput and latency report.
 
-## Phase 9 — Final audit
-- [ ] Re-run all checks on final commit.
-- [ ] Review security and data retention.
-- [ ] Review dependency vulnerabilities.
-- [ ] Verify all docs/URLs.
-- [ ] Verify screenshots show real behavior.
-- [ ] Verify resume claims against evidence.
-- [ ] Report unresolved issues and next steps.
+## Phase 9 — Hardening and audit
+- [ ] Security review.
+- [ ] Retention cleanup job.
+- [ ] Dependency audit.
+- [ ] Documentation accuracy audit.
+- [ ] Clean-checkout verification.
+- [ ] Portfolio release tag and evidence package.

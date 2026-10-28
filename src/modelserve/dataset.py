@@ -30,24 +30,7 @@ class DatasetValidationError(ValueError):
     """Raised when input data does not match the documented source schema."""
 
 
-def _parse_csv(content: bytes) -> pd.DataFrame:
-    try:
-        frame = pd.read_csv(io.BytesIO(content))
-    except (pd.errors.ParserError, UnicodeDecodeError) as exc:
-        raise DatasetValidationError("Dataset is not a readable comma-delimited CSV") from exc
-    frame.columns = [str(column).strip() for column in frame.columns]
-    for column in NUMERIC_COLUMNS:
-        converted = pd.to_numeric(frame[column], errors="coerce")
-        malformed = frame[column].notna() & converted.isna()
-        if malformed.any():
-            raise DatasetValidationError(f"Column '{column}' must contain numeric values")
-        frame[column] = converted
-    validate_dataset(frame)
-    return frame
-
-
-def validate_dataset(frame: pd.DataFrame) -> None:
-    """Validate the exact source schema, required fields, and binary target."""
+def _validate_columns(frame: pd.DataFrame) -> None:
     expected = set(EXPECTED_COLUMNS)
     actual = set(frame.columns)
     missing = sorted(expected - actual)
@@ -59,6 +42,37 @@ def validate_dataset(frame: pd.DataFrame) -> None:
         if extra:
             details.append(f"unexpected columns: {', '.join(extra)}")
         raise DatasetValidationError("Invalid Telco Churn schema (" + "; ".join(details) + ")")
+
+
+def _parse_csv(content: bytes) -> pd.DataFrame:
+    try:
+        frame = pd.read_csv(io.BytesIO(content))
+    except pd.errors.EmptyDataError as exc:
+        raise DatasetValidationError("Dataset contains no data or headers") from exc
+    except (pd.errors.ParserError, UnicodeDecodeError) as exc:
+        raise DatasetValidationError("Dataset is not a readable comma-delimited CSV") from exc
+    except Exception as exc:
+        raise DatasetValidationError(f"Failed to read CSV content: {exc}") from exc
+
+    frame.columns = [str(column).strip() for column in frame.columns]
+
+    # Validate column presence before accessing individual columns
+    _validate_columns(frame)
+
+    for column in NUMERIC_COLUMNS:
+        converted = pd.to_numeric(frame[column], errors="coerce")
+        malformed = frame[column].notna() & converted.isna()
+        if malformed.any():
+            raise DatasetValidationError(f"Column '{column}' must contain numeric values")
+        frame[column] = converted
+
+    validate_dataset(frame)
+    return frame
+
+
+def validate_dataset(frame: pd.DataFrame) -> None:
+    """Validate the exact source schema, required fields, and binary target."""
+    _validate_columns(frame)
     if frame.empty:
         raise DatasetValidationError("Dataset contains no rows")
     allowed_missing = {"TotalCharges"}
@@ -98,5 +112,4 @@ def load_dataset(path: Path | None = None, *, download: bool = True) -> tuple[pd
     else:
         raise DatasetValidationError("Provide a local dataset path or enable downloading")
 
-    frame = _parse_csv(content)
-    return frame, hashlib.sha256(content).hexdigest()
+    return _parse_csv(content), hashlib.sha256(content).hexdigest()

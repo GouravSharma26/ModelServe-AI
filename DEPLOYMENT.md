@@ -1,77 +1,86 @@
-# Deployment Guide
+# Deployment Guide — ModelServe AI
 
 ## Supported delivery stages
-1. Local development.
-2. Reproducible Docker Compose demo.
-3. Optional public demo after provider suitability and persistence are verified.
+1. Local virtual environment development.
+2. Multi-container Docker Compose deployment (PostgreSQL 16, FastAPI inference, Streamlit dashboard).
+3. GitHub Actions CI pipeline.
 
 ## Prerequisites
-- Git.
-- A Python version supported by the pinned ML dependencies.
-- Docker Engine/Desktop and Docker Compose.
-- Dataset download access or a documented local dataset placement step.
+- Git
+- Python 3.12 (tested on 3.12.6)
+- Docker Desktop / Engine (tested on v29.9.2) and Docker Compose (v5.6.1)
 
-Record exact versions after inspecting the actual environment. Do not assume the newest Python version is compatible with all ML libraries.
+## Local virtual environment setup
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.lock
+python -m pip install --no-deps -e .
+```
 
-## Environment setup
-1. Clone/open the repository.
-2. Copy `.env.example` to `.env`.
-3. Fill only required local values.
-4. Never commit `.env`.
-5. Obtain the dataset through the documented source/loader.
-6. Create the model artifact using the documented training command.
-7. Start services with the actual Compose command documented in the README.
-8. Wait for health checks.
-9. Run the smoke test.
+### Running database migrations locally
+```powershell
+# Set DATABASE_URL (or use local SQLite for development)
+$env:DATABASE_URL = "sqlite:///local_dev.db"
+alembic upgrade head
+```
 
-The exact commands, service names, ports, and environment variable names must be updated after implementation. Do not leave this document with guessed commands.
+### Starting services locally
+In separate terminal windows:
+```powershell
+# 1. Start API (port 8000)
+python -m uvicorn modelserve.app:app --host 0.0.0.0 --port 8000
 
-## Docker Compose requirements
-- API, dashboard, PostgreSQL services.
-- Named PostgreSQL volume.
-- Health checks.
-- Explicit environment configuration.
-- No embedded credentials in Dockerfiles or Compose.
-- Restrict database port exposure to local development unless required.
-- Use compatible startup/readiness checks.
-- Do not use a timing sleep as the only dependency check.
+# 2. Start Dashboard (port 8501)
+streamlit run src/modelserve/dashboard.py --server.port 8501
+```
 
-## Public deployment checklist
-- [ ] Confirm provider supports the required Python/container runtime.
-- [ ] Confirm persistent database storage or use a managed PostgreSQL service.
-- [ ] Confirm model artifact storage survives redeploys or is fetched from trusted artifact storage.
-- [ ] Configure secrets through provider environment settings.
-- [ ] Restrict public API access as appropriate.
-- [ ] Configure allowed origins.
-- [ ] Verify health checks and port binding.
-- [ ] Confirm logs do not expose secrets or raw payloads.
-- [ ] Run a smoke test from outside the provider environment.
-- [ ] Confirm dashboard can read the intended API/database.
-- [ ] Test persistence across redeployment/restart.
-- [ ] Record exact commit, deployment time, and URL.
+## Docker Compose deployment
 
-## Recovery
-Document actual behavior for:
-- API restart.
-- Dashboard restart.
-- PostgreSQL restart.
-- Missing/corrupt model artifact.
-- Invalid environment variables.
-- Failed migration.
-- Failed deployment.
+### 1. Configuration
+Copy `.env.example` to `.env`:
+```powershell
+Copy-Item .env.example .env
+```
 
-Do not promise zero downtime or automatic rollback unless implemented and verified.
+### 2. Startup
+```powershell
+# Build container images and start services in the background
+docker compose up -d --build
+```
 
-## Rollback
-Fast Track rollback may initially mean restoring the previous known-good image/configuration and artifact manually. Document the exact tested procedure. Automated model promotion/rollback is Release B unless completed earlier.
+### 3. Verify services and health status
+```powershell
+docker compose ps
+```
+All three services should show `healthy`:
+- `postgres`: PostgreSQL 16 on port 5432 with named volume `postgres_data`.
+- `api`: FastAPI on port 8000 (applies migrations and serves predictions).
+- `dashboard`: Streamlit dashboard on port 8501.
 
-## Troubleshooting
-For each issue, include symptoms, commands/logs to inspect, likely causes, and recovery:
-- Service remains unhealthy.
-- API cannot load model.
-- Database connection fails.
-- Migration fails.
-- Dataset is missing.
-- Dashboard shows no records.
-- Prediction returns validation error.
-- Container port is unavailable.
+### 4. Run automated smoke test
+```powershell
+python scripts/smoke_test.py --url http://localhost:8000
+```
+
+### 5. Accessing interfaces
+- API interactive docs: `http://localhost:8000/docs`
+- Health check: `http://localhost:8000/health/ready`
+- Monitoring dashboard: `http://localhost:8501`
+
+### 6. Teardown
+```powershell
+docker compose down
+# To clean up persisted data volume as well:
+docker compose down -v
+```
+
+## Operational troubleshooting
+
+| Symptom | Cause | Diagnostic command / Action |
+|---|---|---|
+| `/health/ready` returns 503 | Model artifact missing or corrupted | Check `docker compose logs api`. Ensure `artifacts/models` contains a valid version directory with matching SHA-256 manifest. |
+| Database connection failed | PostgreSQL container starting or unhealthy | Inspect `docker compose logs postgres`. The API will continue serving predictions but log database warnings. |
+| `alembic upgrade head` fails | Mismatched database URL or table conflict | Verify `DATABASE_URL` matches PostgreSQL container credentials. |
+| Dashboard shows 0 predictions | Clean database state (empty window) | Expected empty state behavior. Send test requests via `/v1/predictions` or the dashboard Playground tab. |
+| Port conflict (8000 or 8501) | Port already occupied on host | Override port bindings in `.env` (`MODELSERVE_PORT=8001`) or adjust `docker-compose.yml`. |

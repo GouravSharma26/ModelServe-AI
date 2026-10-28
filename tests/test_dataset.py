@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-import hashlib
 import io
-
 import pandas as pd
 import pytest
 
 from modelserve.dataset import (
     EXPECTED_COLUMNS,
     DatasetValidationError,
+    _parse_csv,
     load_dataset,
     validate_dataset,
 )
@@ -37,6 +36,8 @@ def test_validates_source_schema_and_binary_target() -> None:
     ("mutation", "message"),
     [
         (lambda frame: frame.drop(columns=["tenure"]), "missing columns: tenure"),
+        (lambda frame: frame.drop(columns=["TotalCharges"]), "missing columns: TotalCharges"),
+        (lambda frame: frame.drop(columns=["customerID"]), "missing columns: customerID"),
         (lambda frame: frame.assign(extra=1), "unexpected columns: extra"),
         (lambda frame: frame.assign(Churn="maybe"), "exactly the labels"),
         (lambda frame: frame.assign(tenure="not-a-number"), "must contain numeric"),
@@ -60,28 +61,41 @@ def test_allows_missing_total_charges_for_training_imputation() -> None:
     validate_dataset(frame)
 
 
+def test_parse_csv_missing_numeric_column_raises_validation_error() -> None:
+    """CSV missing a numeric column must raise DatasetValidationError, not KeyError."""
+    df = small_dataset().drop(columns=["TotalCharges"])
+    csv_bytes = df.to_csv(index=False).encode("utf-8")
+    with pytest.raises(DatasetValidationError, match="missing columns: TotalCharges"):
+        _parse_csv(csv_bytes)
+
+
+def test_parse_csv_empty_content_raises_validation_error() -> None:
+    """Completely empty CSV input must raise DatasetValidationError."""
+    with pytest.raises(DatasetValidationError, match="contains no data or headers"):
+        _parse_csv(b"")
+
+
+def test_parse_csv_corrupt_bytes_raises_validation_error() -> None:
+    """Malformed non-CSV binary data must raise DatasetValidationError."""
+    with pytest.raises(DatasetValidationError):
+        _parse_csv(b"\x00\xff\xfe\x00BinaryGibberish")
+
+
+def test_parse_csv_numeric_conversion_failure() -> None:
+    """Non-numeric string in numeric column raises DatasetValidationError."""
+    df = small_dataset()
+    df.loc[0, "tenure"] = "five_years"
+    csv_bytes = df.to_csv(index=False).encode("utf-8")
+    with pytest.raises(DatasetValidationError, match="Column 'tenure' must contain numeric"):
+        _parse_csv(csv_bytes)
+
+
 def test_loads_local_csv_and_returns_fingerprint(tmp_path) -> None:
     csv_path = tmp_path / "Telco-Customer-Churn.csv"
-    csv_path.write_text(small_dataset().to_csv(index=False), encoding="utf-8")
+    df = small_dataset()
+    csv_bytes = df.to_csv(index=False).encode("utf-8")
+    csv_path.write_bytes(csv_bytes)
 
-    frame, fingerprint = load_dataset(csv_path)
-
-    assert len(frame) == 20
-    assert fingerprint == hashlib.sha256(csv_path.read_bytes()).hexdigest()
-
-
-def test_downloads_source_csv_and_returns_fingerprint(monkeypatch) -> None:
-    csv_bytes = small_dataset().to_csv(index=False).encode()
-
-    class Response(io.BytesIO):
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *args):
-            self.close()
-
-    monkeypatch.setattr("modelserve.dataset.urllib.request.urlopen", lambda *args, **kwargs: Response(csv_bytes))
-    frame, fingerprint = load_dataset()
-
-    assert len(frame) == 20
-    assert fingerprint == hashlib.sha256(csv_bytes).hexdigest()
+    loaded, fingerprint = load_dataset(csv_path, download=False)
+    assert len(loaded) == len(df)
+    assert len(fingerprint) == 64

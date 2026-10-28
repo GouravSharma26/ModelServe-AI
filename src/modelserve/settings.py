@@ -38,10 +38,14 @@ class Settings:
             os.getenv("MODELSERVE_MAX_PAYLOAD_BYTES", "65536").strip()
         )
     )
+    database_url: str | None = field(
+        default_factory=lambda: (
+            os.getenv("DATABASE_URL", "").strip() or None
+        )
+    )
     model_name: str = "customer-churn-classifier"
 
 
 def get_settings() -> Settings:
     """Return an instance of Settings reflecting current environment."""
     return Settings()
-

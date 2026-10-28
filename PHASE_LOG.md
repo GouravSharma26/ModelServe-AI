@@ -212,3 +212,79 @@ No implementation status is assumed by this documentation package. Antigravity m
 
 **Next phase**
 - Phase 3: PostgreSQL persistence (SQLAlchemy models, Alembic migrations, prediction event telemetry, model version records, and database integration tests).
+
+### 2026-10-28 — Remediation: Code review fixes & test reproducibility
+**Status:** DONE
+
+**Summary**
+- Fixed Finding 1: Enforced request-body size limits even when Content-Length is absent, chunked, or streamed. Added `test_streamed_oversized_payload_without_content_length_returns_413`.
+- Fixed Finding 2: Sanitized validation error logging to record only field locations and error types, eliminating raw Pydantic error objects that contained user input values. Added `test_validation_error_logging_does_not_leak_input_values` proving rejected values do not appear in captured logs.
+- Fixed Finding 3: Updated readiness endpoint (`/health/ready`) to return generic client-facing messages while recording detailed diagnostic causes in internal logs. Added `test_health_ready_unready_returns_generic_message`.
+- Fixed Finding 4: Pre-validated dataset column schema before converting numeric types to ensure missing columns raise `DatasetValidationError` rather than `KeyError`. Added regression tests for missing columns, empty data, and corrupt bytes.
+- Fixed Finding 5: Implemented strict model manifest schema validation in `_validate_manifest_strict`, rejecting absolute paths, path traversal, mismatched versions, and invalid SHA-256 formats. Added 5 negative security tests.
+- Task 3 Reproducibility: Refactored test fixtures in `tests/conftest.py` to generate isolated test model artifacts dynamically with zero external dataset downloads. Verified tests execute cleanly even with `artifacts/models` completely removed.
+
+**Files**
+- Created `tests/conftest.py`.
+- Updated `src/modelserve/dataset.py`, `src/modelserve/model_loader.py`, `src/modelserve/middleware.py`, `src/modelserve/app.py`, `tests/test_dataset.py`, `tests/test_model_loader.py`, `tests/test_api.py`.
+
+**Commands**
+- `.\.venv\Scripts\python.exe -m pytest -q --basetemp=.pytest-tmp` — 46 passed.
+- `Move-Item artifacts/models artifacts/models_backup; pytest; Move-Item ...` — 46 passed in clean/isolated environment without existing models.
+
+### 2026-10-28 — Phase 3: PostgreSQL persistence
+**Status:** DONE
+
+**Summary**
+- Configured SQLAlchemy models (`ModelVersionRecord`, `PredictionRecord`) in `src/modelserve/models.py`. In accordance with ADR-008, raw feature payloads are strictly omitted from prediction history.
+- Built database session and engine management in `src/modelserve/database.py` with connection probe `check_database_connection`.
+- Implemented repository functions in `src/modelserve/repository.py`: `record_prediction`, `upsert_model_version`, and `get_monitoring_summary`.
+- Added initial Alembic migration (`alembic/versions/20261028_0001_initial_schema.py`) and verified upgrade and downgrade cycles.
+- Integrated persistence into FastAPI: predictions automatically record telemetry, while database outage resilience ensures inference succeeds even if the database is disconnected.
+- Added `GET /v1/monitoring/summary` endpoint returning rolling window aggregations and latency percentiles.
+
+**Files**
+- Added `src/modelserve/models.py`, `src/modelserve/database.py`, `src/modelserve/repository.py`, `alembic.ini`, `alembic/env.py`, `alembic/script.py.mako`, `alembic/versions/20261028_0001_initial_schema.py`, `tests/test_persistence.py`.
+- Updated `src/modelserve/settings.py`, `src/modelserve/schemas.py`, `src/modelserve/app.py`, `pyproject.toml`, `requirements.lock`.
+
+**Commands**
+- `alembic upgrade head; alembic downgrade base` — exit 0; migration verified.
+- `.\.venv\Scripts\python.exe -m pytest -q tests/test_persistence.py` — 8 passed.
+
+### 2026-10-28 — Phase 4: Monitoring dashboard and container deployment
+**Status:** DONE
+
+**Summary**
+- Built Streamlit monitoring dashboard (`src/modelserve/dashboard.py`) with three views: Live Telemetry (charts, latency profiles, empty states), Model Provenance (dataset metadata, offline confusion matrix, benchmark metrics), and an interactive Prediction Playground.
+- Created production Dockerfiles for both services: `Dockerfile.api` (non-root `appuser`, health check, Alembic auto-migration) and `Dockerfile.dashboard` (non-root `appuser`, health check).
+- Configured `docker-compose.yml` with `postgres` (PostgreSQL 16 Alpine with named volume `postgres_data`), `api`, and `dashboard` services, using health checks for ordered startup.
+- Verified Docker Compose configuration via `docker compose config`.
+
+**Files**
+- Added `src/modelserve/dashboard.py`, `Dockerfile.api`, `Dockerfile.dashboard`, `docker-compose.yml`.
+- Updated `DEPLOYMENT.md`, `DEVELOPMENT_CHECKLIST.md`, `ACCEPTANCE_CRITERIA.md`.
+
+**Commands**
+- `docker compose config` — exit 0; configuration valid.
+- `pip check` — exit 0; no broken requirements.
+
+### 2026-10-28 — Phase 5: CI, smoke testing, and Fast Track delivery
+**Status:** DONE
+
+**Summary**
+- Implemented GitHub Actions CI workflow (`.github/workflows/ci.yml`) testing Python 3.12, locked dependencies, pip check, syntax compilation, full test suite, and docker compose validation.
+- Created automated end-to-end smoke test script (`scripts/smoke_test.py`) validating `/health/live`, `/health/ready`, `/v1/model/info`, valid predictions, 422 error contracts, and monitoring telemetry.
+- Updated documentation across `README.md`, `DEPLOYMENT.md`, `ACCEPTANCE_CRITERIA.md`, and `DEVELOPMENT_CHECKLIST.md`.
+
+**Files**
+- Added `.github/workflows/ci.yml`, `scripts/smoke_test.py`.
+- Updated `README.md`, `DEPLOYMENT.md`, `DEVELOPMENT_CHECKLIST.md`, `ACCEPTANCE_CRITERIA.md`, `PHASE_LOG.md`.
+
+**Commands**
+- `pytest -ra` — 54 passed, 11 warnings in 3.99s.
+- `python -m compileall -q src tests` — exit 0.
+- `docker compose config` — exit 0.
+
+**Tests and verification**
+- 54 automated tests across 5 test modules passing.
+- Test coverage spans dataset parsing, reproducible training, strict manifest security, API validation and limits, logging sanitization, database persistence, monitoring queries, and resilient failure paths.

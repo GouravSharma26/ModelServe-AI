@@ -8,14 +8,17 @@ version = "0.1.0"
 description = "Reproducible model training and inference platform"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+  "alembic==1.20.1",
   "fastapi==0.162.0",
   "httpx==0.28.1",
   "joblib==1.4.2",
   "numpy==2.1.3",
   "pandas==2.3.2",
+  "psycopg2-binary==2.9.13",
   "pydantic==2.14.1",
   "scikit-learn==1.5.2",
   "scipy==1.16.2",
+  "SQLAlchemy==2.1.6",
   "uvicorn==0.54.0",
 ]
 

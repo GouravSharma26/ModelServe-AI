@@ -1,0 +1,65 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: modelserve_user
+      POSTGRES_PASSWORD: modelserve_password
+      POSTGRES_DB: modelserve_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U modelserve_user -d modelserve_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    restart: unless-stopped
+    command: sh -c "alembic upgrade head && python -m uvicorn modelserve.app:app --host 0.0.0.0 --port 8000"
+    environment:
+      DATABASE_URL: postgresql://modelserve_user:modelserve_password@postgres:5432/modelserve_db
+      MODELSERVE_ARTIFACTS_DIR: /app/artifacts/models
+      MODELSERVE_HOST: 0.0.0.0
+      MODELSERVE_PORT: 8000
+      MODELSERVE_LOG_LEVEL: INFO
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./artifacts:/app/artifacts:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health/live || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
+    restart: unless-stopped
+    environment:
+      API_URL: http://api:8000
+      DATABASE_URL: postgresql://modelserve_user:modelserve_password@postgres:5432/modelserve_db
+    ports:
+      - "8501:8501"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8501/_stcore/health || exit 1"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+
+volumes:
+  postgres_data:
+

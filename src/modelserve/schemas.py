@@ -140,6 +140,38 @@ class HealthReadyResponse(BaseModel):
 
     status: Literal["ready"] = "ready"
     model_version: str
+    database_connected: bool = True
+
+
+class ScoreSummary(BaseModel):
+    """Aggregated prediction score statistics."""
+
+    mean: float
+    min: float
+    max: float
+
+
+class LatencySummary(BaseModel):
+    """Inference execution latency percentiles in milliseconds."""
+
+    mean: float
+    p50: float
+    p90: float
+    p95: float
+    p99: float
+
+
+class MonitoringSummaryResponse(BaseModel):
+    """Bounded-window inference activity summary for /v1/monitoring/summary."""
+
+    window_hours: int
+    window_start_utc: str
+    window_end_utc: str
+    model_version: str | None = None
+    total_predictions: int
+    label_distribution: dict[str, int]
+    score_summary: ScoreSummary
+    latency_summary_ms: LatencySummary
 
 
 class ErrorDetail(BaseModel):
@@ -155,4 +187,3 @@ class ErrorResponse(BaseModel):
     """Unified error envelope."""
 
     error: ErrorDetail
-

@@ -3,19 +3,23 @@
 from __future__ import annotations
 
 import logging
+import time
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from typing import Any
 
 import pandas as pd
-from fastapi import FastAPI, HTTPException, Request, status
+from fastapi import FastAPI, HTTPException, Query, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from modelserve.database import check_database_connection, get_engine, get_session_factory, init_db
 from modelserve.logging import setup_logging
 from modelserve.middleware import (
     AccessLoggingMiddleware,
     PayloadLimitMiddleware,
+    PayloadTooLargeError,
     RequestIDMiddleware,
 )
 from modelserve.model_loader import (
@@ -23,12 +27,18 @@ from modelserve.model_loader import (
     LoadedModel,
     load_active_model,
 )
+from modelserve.repository import (
+    get_monitoring_summary,
+    record_prediction,
+    upsert_model_version,
+)
 from modelserve.schemas import (
     ErrorResponse,
     HealthLiveResponse,
     HealthReadyResponse,
     ModelInfoResponse,
     ModelMetadata,
+    MonitoringSummaryResponse,
     PredictionOutput,
     PredictionRequest,
     PredictionResponse,
@@ -45,7 +55,7 @@ def _get_request_id(request: Request) -> str:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan context: verifies and loads the active model once at startup."""
+    """Application lifespan context: initializes model and database connection at startup."""
     settings: Settings = getattr(app.state, "settings", get_settings())
     setup_logging(settings.log_level)
     logger.info("Starting ModelServe AI service in %s environment", settings.env)
@@ -53,7 +63,25 @@ async def lifespan(app: FastAPI):
     app.state.model = None
     app.state.is_ready = False
     app.state.ready_error = None
+    app.state.db_engine = None
+    app.state.session_factory = None
+    app.state.db_connected = False
 
+    # Initialize Database if configured
+    if settings.database_url:
+        try:
+            engine = get_engine(settings.database_url)
+            app.state.db_engine = engine
+            app.state.session_factory = get_session_factory(engine)
+            # Bootstrap tables directly if using sqlite for tests/dev
+            if settings.database_url.startswith("sqlite"):
+                init_db(engine)
+            app.state.db_connected = check_database_connection(engine)
+            logger.info("Database connection initialized. Connected: %s", app.state.db_connected)
+        except Exception as exc:
+            logger.warning("Database setup failed: %s", exc)
+
+    # Initialize Model
     try:
         loaded_model = load_active_model(
             artifacts_dir=settings.artifacts_dir,
@@ -66,6 +94,24 @@ async def lifespan(app: FastAPI):
             loaded_model.name,
             loaded_model.version,
         )
+
+        # Register model metadata in database if connected
+        if app.state.db_connected and app.state.session_factory:
+            try:
+                with app.state.session_factory() as session:
+                    upsert_model_version(
+                        session,
+                        version=loaded_model.version,
+                        name=loaded_model.name,
+                        artifact_sha256=loaded_model.manifest["artifact_sha256"],
+                        dataset_fingerprint=loaded_model.manifest.get("dataset", {}).get("sha256", "unknown"),
+                        created_at_utc=datetime.now(UTC),
+                        manifest=loaded_model.manifest,
+                    )
+                logger.info("Model version %s registered in database", loaded_model.version)
+            except Exception as exc:
+                logger.warning("Failed to register model version in database: %s", exc)
+
     except ArtifactError as exc:
         app.state.ready_error = str(exc)
         logger.error("Model initialization failed: %s", exc)
@@ -76,6 +122,8 @@ async def lifespan(app: FastAPI):
     yield
 
     logger.info("Shutting down ModelServe AI service")
+    if getattr(app.state, "db_engine", None):
+        app.state.db_engine.dispose()
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -105,18 +153,45 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Exception Handlers
     # --------------------------------------------------------------------------
 
+    @app.exception_handler(PayloadTooLargeError)
+    async def payload_too_large_exception_handler(
+        request: Request, exc: PayloadTooLargeError
+    ) -> JSONResponse:
+        request_id = _get_request_id(request)
+        return JSONResponse(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            content={
+                "error": {
+                    "code": "PAYLOAD_TOO_LARGE",
+                    "message": str(exc.detail if hasattr(exc, "detail") else exc),
+                    "request_id": request_id,
+                }
+            },
+            headers={"X-Request-ID": request_id},
+        )
+
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(
         request: Request, exc: RequestValidationError
     ) -> JSONResponse:
         request_id = _get_request_id(request)
+
+        # Sanitize logged representation: log only types and locations, never raw input values
+        sanitized_log = [
+            {
+                "loc": [str(loc_item) for loc_item in err.get("loc", [])],
+                "type": err.get("type", "validation_error"),
+            }
+            for err in exc.errors()
+        ]
         logger.warning(
             "Validation error on %s %s: %s",
             request.method,
             request.url.path,
-            exc.errors(),
+            sanitized_log,
             extra={"request_id": request_id},
         )
+
         details = [
             {
                 "loc": [str(loc_item) for loc_item in err.get("loc", [])],
@@ -146,6 +221,37 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         request: Request, exc: StarletteHTTPException
     ) -> JSONResponse:
         request_id = _get_request_id(request)
+
+        # Handle PayloadTooLargeError wrapped inside ExceptionGroup by BaseHTTPMiddleware
+        cause = getattr(exc, "__cause__", None)
+        if cause is not None:
+            if isinstance(cause, PayloadTooLargeError):
+                return JSONResponse(
+                    status_code=413,
+                    content={
+                        "error": {
+                            "code": "PAYLOAD_TOO_LARGE",
+                            "message": str(cause.detail),
+                            "request_id": request_id,
+                        }
+                    },
+                    headers={"X-Request-ID": request_id},
+                )
+            if hasattr(cause, "exceptions"):
+                for sub_exc in getattr(cause, "exceptions", []):
+                    if isinstance(sub_exc, PayloadTooLargeError):
+                        return JSONResponse(
+                            status_code=413,
+                            content={
+                                "error": {
+                                    "code": "PAYLOAD_TOO_LARGE",
+                                    "message": str(sub_exc.detail),
+                                    "request_id": request_id,
+                                }
+                            },
+                            headers={"X-Request-ID": request_id},
+                        )
+
         code_map = {
             400: "BAD_REQUEST",
             404: "NOT_FOUND",
@@ -218,18 +324,29 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if not getattr(app.state, "is_ready", False) or app.state.model is None:
             request_id = _get_request_id(request)
             error_reason = getattr(app.state, "ready_error", "Model artifact not loaded")
+            logger.error(
+                "Readiness probe failed: %s",
+                error_reason,
+                extra={"request_id": request_id},
+            )
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=f"Service unavailable: {error_reason}",
+                detail="Service unavailable: model is not ready to serve predictions.",
             )
+
+        db_connected = bool(getattr(app.state, "db_connected", False))
+        if getattr(app.state, "db_engine", None):
+            db_connected = check_database_connection(app.state.db_engine)
+            app.state.db_connected = db_connected
 
         return HealthReadyResponse(
             status="ready",
             model_version=app.state.model.version,
+            database_connected=db_connected,
         )
 
     # --------------------------------------------------------------------------
-    # Model Routes
+    # Model & Monitoring Routes
     # --------------------------------------------------------------------------
 
     @app.get(
@@ -277,7 +394,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         },
     )
     async def predict_churn(request: Request, payload: PredictionRequest) -> PredictionResponse:
-        """Accepts a single customer record and predicts churn label and probability score."""
+        """Accepts a single customer record, predicts churn outcome, and records telemetry."""
         model: LoadedModel | None = getattr(app.state, "model", None)
         if model is None:
             raise HTTPException(
@@ -286,12 +403,34 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
 
         request_id = _get_request_id(request)
+        start_time = time.perf_counter()
 
         # Convert Pydantic features to DataFrame for sklearn pipeline
         features_dict = payload.features.model_dump()
         features_df = pd.DataFrame([features_dict])
 
         label, score = model.predict(features_df)
+        latency_ms = round((time.perf_counter() - start_time) * 1000, 2)
+
+        # Durable telemetry persistence (raw features are omitted per ADR-008)
+        session_factory = getattr(app.state, "session_factory", None)
+        if session_factory:
+            try:
+                with session_factory() as session:
+                    record_prediction(
+                        session,
+                        request_id=request_id,
+                        model_version=model.version,
+                        label=label,
+                        score=score,
+                        latency_ms=latency_ms,
+                    )
+            except Exception as exc:
+                logger.error(
+                    "Failed to persist prediction event to database: %s",
+                    exc,
+                    extra={"request_id": request_id},
+                )
 
         return PredictionResponse(
             request_id=request_id,
@@ -299,6 +438,44 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             prediction=PredictionOutput(label=label, score=score),
             status="success",
         )
+
+    @app.get(
+        "/v1/monitoring/summary",
+        response_model=MonitoringSummaryResponse,
+        tags=["Monitoring"],
+        summary="Aggregated inference activity over a rolling time window",
+        responses={
+            200: {"model": MonitoringSummaryResponse},
+            503: {"model": ErrorResponse, "description": "Database store unavailable"},
+        },
+    )
+    async def monitoring_summary(
+        request: Request,
+        window_hours: int = Query(default=24, ge=1, le=720, description="Rolling time window in hours"),
+        model_version: str | None = Query(default=None, description="Filter summary by model version"),
+    ) -> MonitoringSummaryResponse:
+        """Returns bounded-window inference statistics (label distribution, latency percentiles)."""
+        session_factory = getattr(app.state, "session_factory", None)
+        if not session_factory:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Persistence store is not configured or unavailable",
+            )
+
+        try:
+            with session_factory() as session:
+                summary = get_monitoring_summary(
+                    session,
+                    window_hours=window_hours,
+                    model_version=model_version,
+                )
+            return MonitoringSummaryResponse(**summary)
+        except Exception as exc:
+            logger.error("Failed to query monitoring summary: %s", exc)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Database query failed during monitoring summary retrieval",
+            )
 
     return app
 
