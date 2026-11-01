@@ -149,3 +149,4 @@ export default function HelpPanel({ isOpen, onClose, onRestartTutorial }) {
     </div>
   );
 }
+

@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 
 const TUTORIAL_STEPS = [
   {
@@ -8,7 +9,7 @@ const TUTORIAL_STEPS = [
     targetSelector: '.status-grid',
     description:
       'ModelServe AI serves real-time machine learning predictions for customer churn. The status indicators above report the live health of the API process, the inference engine, and the cryptographically verified model artifact.',
-    actionHint: 'Notice the API Process and Inference Engine indicators.',
+    actionHint: 'Notice the API Process and Inference Engine status cards.',
   },
   {
     step: 2,
@@ -23,19 +24,19 @@ const TUTORIAL_STEPS = [
     step: 3,
     title: 'Upload and Validate Records',
     tab: 'prediction',
-    targetSelector: '#csv-workflow-section',
+    targetSelector: '#btn-upload-csv-trigger',
     description:
       'Upload any CSV of customer profiles. The frontend parses and validates all 19 model features locally in your browser—no data is uploaded or stored on the server until you choose to predict.',
-    actionHint: 'Upload demo-customers.csv to see the interactive customer preview table.',
+    actionHint: 'Click "Upload CSV" to select a customer profile from the preview table.',
   },
   {
     step: 4,
     title: 'Run a Real Prediction',
     tab: 'prediction',
-    targetSelector: '.form-submit-row',
+    targetSelector: '.form-submit-row .btn-primary',
     description:
       'Select a customer from the preview table or adjust the feature inputs in the playground, then click "Run prediction". The request is evaluated by the live scikit-learn model on Render.',
-    actionHint: 'Run inference to generate a churn risk probability score.',
+    actionHint: 'Click "Run prediction" to generate a churn risk probability score.',
   },
   {
     step: 5,
@@ -77,7 +78,7 @@ export default function TutorialController({
     }
   }, [currentStep, stepData.tab, activeTab, onTabChange]);
 
-  // Measure and highlight target element
+  // Measure target element in viewport coordinates (position: fixed)
   const updateTargetPosition = useCallback(() => {
     if (!stepData.targetSelector) {
       setTargetRect(null);
@@ -88,30 +89,86 @@ export default function TutorialController({
     if (el) {
       const rect = el.getBoundingClientRect();
       setTargetRect({
-        top: rect.top + window.scrollY,
-        left: rect.left + window.scrollX,
+        top: rect.top,
+        left: rect.left,
         width: rect.width,
         height: rect.height,
-        bottom: rect.bottom + window.scrollY,
       });
-
-      // Smoothly scroll target into view if needed
-      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     } else {
       setTargetRect(null);
     }
   }, [stepData.targetSelector]);
 
+  // When step or tab changes, scroll target element into view smoothly and track it
   useEffect(() => {
-    const timer = setTimeout(updateTargetPosition, 250);
-    window.addEventListener('resize', updateTargetPosition);
-    window.addEventListener('scroll', updateTargetPosition);
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener('resize', updateTargetPosition);
-      window.removeEventListener('scroll', updateTargetPosition);
+    let animationFrameId;
+    let startTime = null;
+
+    const el = document.querySelector(stepData.targetSelector);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    // Repeatedly track element position while smooth scrolling occurs (400ms duration)
+    const trackSmoothScroll = (timestamp) => {
+      if (!startTime) startTime = timestamp;
+      updateTargetPosition();
+      if (timestamp - startTime < 450) {
+        animationFrameId = requestAnimationFrame(trackSmoothScroll);
+      }
     };
-  }, [updateTargetPosition, activeTab, currentStep]);
+
+    animationFrameId = requestAnimationFrame(trackSmoothScroll);
+
+    // Also poll at defined intervals to catch asynchronous DOM updates (e.g. tab switches)
+    const timer1 = setTimeout(updateTargetPosition, 80);
+    const timer2 = setTimeout(updateTargetPosition, 200);
+    const timer3 = setTimeout(updateTargetPosition, 400);
+
+    return () => {
+      cancelAnimationFrame(animationFrameId);
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      clearTimeout(timer3);
+    };
+  }, [currentStep, activeTab, stepData.targetSelector, updateTargetPosition]);
+
+  // Track window scroll and resize continuously
+  useEffect(() => {
+    const handleScrollOrResize = () => {
+      updateTargetPosition();
+    };
+
+    window.addEventListener('scroll', handleScrollOrResize, { passive: true });
+    window.addEventListener('resize', handleScrollOrResize);
+
+    return () => {
+      window.removeEventListener('scroll', handleScrollOrResize);
+      window.removeEventListener('resize', handleScrollOrResize);
+    };
+  }, [updateTargetPosition]);
+
+  // Keyboard controls: Escape exits, ArrowRight advances, ArrowLeft goes back
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        onExit();
+      } else if (e.key === 'ArrowRight') {
+        if (currentStep < TUTORIAL_STEPS.length) {
+          setCurrentStep(currentStep + 1);
+        } else {
+          onComplete();
+        }
+      } else if (e.key === 'ArrowLeft') {
+        if (currentStep > 1) {
+          setCurrentStep(currentStep - 1);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [currentStep, onExit, onComplete, setCurrentStep]);
 
   const handleNext = () => {
     if (currentStep < TUTORIAL_STEPS.length) {
@@ -127,17 +184,17 @@ export default function TutorialController({
     }
   };
 
-  return (
+  const content = (
     <div className="tutorial-overlay-wrapper">
-      {/* Target element spotlight outline */}
+      {/* Target element spotlight outline with full-screen backdrop cutout */}
       {targetRect && (
         <div
           className="tutorial-spotlight"
           style={{
-            top: `${targetRect.top - 6}px`,
-            left: `${targetRect.left - 6}px`,
-            width: `${targetRect.width + 12}px`,
-            height: `${targetRect.height + 12}px`,
+            top: `${Math.round(targetRect.top - 6)}px`,
+            left: `${Math.round(targetRect.left - 6)}px`,
+            width: `${Math.round(targetRect.width + 12)}px`,
+            height: `${Math.round(targetRect.height + 12)}px`,
           }}
         />
       )}
@@ -213,4 +270,6 @@ export default function TutorialController({
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(content, document.body) : null;
 }

@@ -94,3 +94,4 @@ function parseCsvLine(line) {
   result.push(currentVal);
   return result;
 }
+

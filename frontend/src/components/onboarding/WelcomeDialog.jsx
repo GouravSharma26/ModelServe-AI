@@ -89,3 +89,4 @@ export default function WelcomeDialog({ onStartTutorial, onSkip }) {
     </div>
   );
 }
+
