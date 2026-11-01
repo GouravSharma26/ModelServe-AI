@@ -1,4 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import WelcomeDialog from './components/onboarding/WelcomeDialog';
+import TutorialController from './components/onboarding/TutorialController';
+import FloatingHelpButton from './components/help/FloatingHelpButton';
+import CsvWorkflow from './components/prediction/CsvWorkflow';
+import { useOnboarding } from './hooks/useOnboarding';
 
 const API_URL = (
   import.meta.env.VITE_API_BASE_URL || 'https://modelserve-ai.onrender.com'
@@ -46,6 +51,19 @@ export default function App() {
   const [telemetry, setTelemetry] = useState(null);
   const [telemetryLoading, setTelemetryLoading] = useState(false);
   const [telemetryError, setTelemetryError] = useState(null);
+
+  // Onboarding hook
+  const {
+    showWelcome,
+    tutorialActive,
+    currentStep,
+    setCurrentStep,
+    startTutorial,
+    skipTutorial,
+    completeTutorial,
+    exitTutorial,
+    restartTutorial,
+  } = useOnboarding();
 
   // Fetch health and model metadata
   const fetchHealthAndModel = useCallback(async () => {
@@ -115,9 +133,8 @@ export default function App() {
     }));
   };
 
-  // Submit prediction
-  const handlePredict = async (e) => {
-    e.preventDefault();
+  // Execute inference request against API
+  const executePrediction = async (featurePayload) => {
     setPredictLoading(true);
     setPredictError(null);
     setPredictionResult(null);
@@ -125,6 +142,14 @@ export default function App() {
     const clientRequestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
     try {
+      const payloadToSend = {
+        ...featurePayload,
+        SeniorCitizen: Number(featurePayload.SeniorCitizen),
+        tenure: Number(featurePayload.tenure),
+        MonthlyCharges: Number(featurePayload.MonthlyCharges),
+        TotalCharges: Number(featurePayload.TotalCharges),
+      };
+
       const res = await fetch(`${API_URL}/v1/predictions`, {
         method: 'POST',
         headers: {
@@ -132,13 +157,7 @@ export default function App() {
           'X-Request-ID': clientRequestId,
         },
         body: JSON.stringify({
-          features: {
-            ...features,
-            SeniorCitizen: Number(features.SeniorCitizen),
-            tenure: Number(features.tenure),
-            MonthlyCharges: Number(features.MonthlyCharges),
-            TotalCharges: Number(features.TotalCharges),
-          },
+          features: payloadToSend,
         }),
       });
 
@@ -156,8 +175,36 @@ export default function App() {
     }
   };
 
+  const handlePredictSubmit = (e) => {
+    e.preventDefault();
+    executePrediction(features);
+  };
+
   return (
     <div className="app-shell">
+      {/* Welcome Onboarding Modal */}
+      {showWelcome && (
+        <WelcomeDialog
+          onStartTutorial={startTutorial}
+          onSkip={skipTutorial}
+        />
+      )}
+
+      {/* Guided Tutorial Controller */}
+      {tutorialActive && (
+        <TutorialController
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          onComplete={completeTutorial}
+          onExit={exitTutorial}
+          currentStep={currentStep}
+          setCurrentStep={setCurrentStep}
+        />
+      )}
+
+      {/* Persistent Floating Help Button */}
+      <FloatingHelpButton onRestartTutorial={restartTutorial} />
+
       {/* Top Header */}
       <header className="app-header">
         <div className="header-brand">
@@ -293,7 +340,14 @@ export default function App() {
               </div>
             </div>
 
-            <form onSubmit={handlePredict} className="prediction-form">
+            {/* CSV Sample Data & Inspection Workflow */}
+            <CsvWorkflow
+              onSelectCustomer={(cust) => setFeatures(cust.features)}
+              onRunPrediction={(custFeatures) => executePrediction(custFeatures)}
+              disabled={predictLoading}
+            />
+
+            <form onSubmit={handlePredictSubmit} className="prediction-form">
               <div className="form-sections-grid">
                 {/* Column 1: Demographics & Account */}
                 <div className="form-section">
@@ -352,7 +406,7 @@ export default function App() {
                   </div>
 
                   <div className="field-group">
-                    <label htmlFor="field-tenure" className="field-label">Tenure (Months)</label>
+                    <label htmlFor="field-tenure" className="field-label">Tenure (months)</label>
                     <input
                       id="field-tenure"
                       type="number"
@@ -383,9 +437,9 @@ export default function App() {
                   </div>
 
                   <div className="field-group">
-                    <label htmlFor="field-multlines" className="field-label">Multiple Lines</label>
+                    <label htmlFor="field-multiple" className="field-label">Multiple Lines</label>
                     <select
-                      id="field-multlines"
+                      id="field-multiple"
                       className="field-control"
                       value={features.MultipleLines}
                       onChange={(e) => handleFeatureChange('MultipleLines', e.target.value)}
@@ -418,8 +472,8 @@ export default function App() {
                       value={features.OnlineSecurity}
                       onChange={(e) => handleFeatureChange('OnlineSecurity', e.target.value)}
                     >
-                      <option value="Yes">Yes</option>
                       <option value="No">No</option>
+                      <option value="Yes">Yes</option>
                       <option value="No internet service">No internet service</option>
                     </select>
                   </div>
@@ -446,8 +500,8 @@ export default function App() {
                       value={features.DeviceProtection}
                       onChange={(e) => handleFeatureChange('DeviceProtection', e.target.value)}
                     >
-                      <option value="Yes">Yes</option>
                       <option value="No">No</option>
+                      <option value="Yes">Yes</option>
                       <option value="No internet service">No internet service</option>
                     </select>
                   </div>

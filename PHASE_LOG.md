@@ -365,5 +365,33 @@ No implementation status is assumed by this documentation package. Antigravity m
 - `python -m compileall -q src tests scripts` — exit 0.
 - `npm --prefix frontend run build` — exit 0; built in 680ms (Vite production bundle generated).
 
+### 2026-11-01 — Feature: Interactive Onboarding, Sample CSV Workflow & Persistent Help
+**Status:** DONE
+
+**Summary**
+- Implemented first-time welcome dialog (`WelcomeDialog.jsx`), dismissible with Escape or skip button, with completion state stored in `localStorage`.
+- Created interactive 6-step guided walkthrough (`TutorialController.jsx`) featuring target element spotlight highlighting, progress bar, tab switching, and navigation controls (Previous, Next, Skip, Exit).
+- Created verified synthetic customer dataset (`frontend/public/demo-customers.csv`) with 5 diverse customer profiles containing all 19 model features.
+- Implemented client-side CSV parser (`csvParser.js`) and schema validator (`csvValidation.js`) validating required feature columns, numeric ranges, and categorical values with row-level error reporting.
+- Created `CsvWorkflow.jsx` in the Prediction playground allowing users to download the sample dataset, upload custom customer CSVs, preview parsed records in a selectable table, and trigger real-time inference against `POST /v1/predictions` without sending batch files to the backend.
+- Added persistent floating help button (`FloatingHelpButton.jsx`) and accordion help panel (`HelpPanel.jsx`) with quick help definitions, ML metrics explanations, and a guided tutorial restart trigger.
+- Refined responsive design system in `frontend/src/index.css` supporting desktop, tablet, and mobile layouts.
+
+**Files**
+- Added `frontend/public/demo-customers.csv`, `frontend/src/utils/csvParser.js`, `frontend/src/utils/csvValidation.js`.
+- Added `frontend/src/components/prediction/CsvWorkflow.jsx`.
+- Added `frontend/src/components/onboarding/WelcomeDialog.jsx`, `frontend/src/components/onboarding/TutorialController.jsx`.
+- Added `frontend/src/components/help/FloatingHelpButton.jsx`, `frontend/src/components/help/HelpPanel.jsx`.
+- Added `frontend/src/hooks/useOnboarding.js`.
+- Updated `frontend/src/App.jsx`, `frontend/src/index.css`, `DECISIONS.md`, `PHASE_LOG.md`.
+
+**Commands and Results**
+- `npm --prefix frontend run build` — exit 0; built in 586ms (`dist/index.html`, `dist/demo-customers.csv`, `dist/assets/index-Bu1emFjT.css`, `dist/assets/index-CPKcG12G.js`).
+- `python -m pytest -ra` — exit 0; 57 passed, 12 warnings in 2.85s.
+- `python -m compileall -q src tests scripts` — exit 0.
+- `node` schema and validation tests — validated clean headers, 5 records, missing column detection, and row-level error reporting.
+
+
+
 
 

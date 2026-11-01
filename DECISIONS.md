@@ -57,3 +57,9 @@ Update this file when a decision changes. Do not silently change decisions that 
 **Reason:** Streamlit is suited for local prototyping but is not natively compatible with serverless Edge/CDN hosting on Vercel. A React + Vite dashboard consuming CORS-enabled REST endpoints provides snappy client-side responsiveness, mobile layout, and zero-maintenance global CDN delivery.
 **Consequences:** Backend supports configurable CORS (`CORS_ORIGINS`) and dynamic port binding (`$PORT`); frontend uses `VITE_API_BASE_URL` with runtime override capability; Docker builds generate self-contained reproducible models for container platforms without volume mounts.
 
+## ADR-012: Client-side CSV sample inspection and guided onboarding
+**Decision:** Support interactive exploration through an optional 6-step guided onboarding walkthrough, persistent floating contextual help (`?`), downloadable synthetic customer dataset (`demo-customers.csv`), and client-side CSV parsing/validation.
+**Reason:** Allows evaluators, interviewers, and recruiters to test realistic churn predictions without manually keying 19 features, while preserving data minimization and privacy by validating and parsing files entirely in the client browser without introducing a complex server-side batch ingestion service.
+**Consequences:** The frontend validates all 19 feature types and categorical constraints in JavaScript; users select individual customer records whose attributes populate the form and dispatch single-record requests to the existing `POST /v1/predictions` endpoint; onboarding completion state is saved to `localStorage`.
+
+
