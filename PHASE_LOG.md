@@ -395,3 +395,29 @@ No implementation status is assumed by this documentation package. Antigravity m
 
 
 
+
+### 2026-11-01 — Phase 6: MLflow & Model Lifecycle Management
+**Status:** DONE
+
+**Summary**
+- Integrated MLflow experiment tracking into `src/modelserve/training.py` and dedicated tracking module `src/modelserve/tracking.py` targeting named experiment `modelserve-customer-churn`.
+- Logged training parameters (seeds, splits, feature columns, hyperparameters), distinct validation metrics (`val_pr_auc`, `val_roc_auc`, `val_f1`, etc.), held-out test metrics (`test_pr_auc`, `test_roc_auc`, `test_f1`, etc.), and verified artifacts (`manifest.json`, `evaluation.json`, `model.joblib`, `confusion_matrix.json`) without logging customer PII or raw feature data.
+- Created Alembic database migration `20261101_0002_model_lifecycle_and_audit.py` adding `stage` (`candidate`, `approved`, `active`, `retired`) and `mlflow_run_id` to `model_versions`, and creating the immutable `model_promotion_audit` table.
+- Implemented `ModelLifecycleService` in `src/modelserve/lifecycle.py` for candidate registration, candidate-vs-active metric and schema comparison, quality gating, transactional promotions, and rollbacks.
+- Built deterministic quality gates in `src/modelserve/quality_gates.py` enforcing artifact existence, SHA-256 cryptographic match, 19-feature schema conformance, finite metric bounds, PR-AUC baseline >= 0.55, and regression tolerance <= 0.03.
+- Implemented `modelserve-lifecycle` administrative CLI (`src/modelserve/lifecycle_cli.py`) supporting `list`, `register`, `compare`, `check-gates`, `promote`, `rollback`, and `history` subcommands.
+- Integrated dynamic active model resolution into FastAPI lifespan (`src/modelserve/app.py`), verifying SHA-256 before loading, ensuring public inference API remains read-only, and failing readiness (503) if active model is unavailable.
+- Added comprehensive unit and integration test suites: `tests/test_mlflow_tracking.py`, `tests/test_quality_gates.py`, and `tests/test_lifecycle.py` with end-to-end promotion, rollback, and serving simulation.
+
+**Files**
+- Added `src/modelserve/tracking.py`, `src/modelserve/quality_gates.py`, `src/modelserve/lifecycle.py`, `src/modelserve/lifecycle_cli.py`.
+- Added `alembic/versions/20261101_0002_model_lifecycle_and_audit.py`.
+- Added `tests/test_mlflow_tracking.py`, `tests/test_quality_gates.py`, `tests/test_lifecycle.py`.
+- Updated `src/modelserve/models.py`, `src/modelserve/training.py`, `src/modelserve/app.py`, `pyproject.toml`, `requirements.lock`, `DECISIONS.md`, `DEVELOPMENT_CHECKLIST.md`.
+
+**Commands and Results**
+- `python -m pytest -ra` — 73 passed, 37 warnings in 7.78s across all 9 test suites.
+- `npm --prefix frontend run test` — 33 passed, 4 test files in 2.94s.
+- `npm --prefix frontend run build` — exit 0; built in 595ms.
+- `python -m compileall -q src tests scripts` — exit 0.
+- `alembic upgrade head` — verified cleanly on fresh database.

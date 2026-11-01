@@ -70,12 +70,12 @@
 - [x] Release notes and actual limitations. (Documented in MODEL_CARD.md and DEPLOYMENT.md.)
 
 ## Phase 6 — MLflow/model lifecycle
-- [ ] Experiment tracking.
-- [ ] Registered model versions.
-- [ ] Candidate-vs-active comparison.
-- [ ] Quality gates.
-- [ ] Promotion audit events.
-- [ ] Rollback tests.
+- [x] Experiment tracking. (`src/modelserve/tracking.py` logs training parameters, split policy, distinct validation and held-out test metrics, confusion matrix, and verified artifacts to named experiment `modelserve-customer-churn` without PII or raw customer records.)
+- [x] Registered model versions. (`model_versions` table and Alembic migration `20261101_0002` track lifecycle stages: `candidate`, `approved`, `active`, `retired`, with associated `mlflow_run_id`.)
+- [x] Candidate-vs-active comparison. (`ModelLifecycleService.compare_candidate_with_active` extracts validation/test metrics, computes metric deltas, checks feature schema compatibility, and flags regressions.)
+- [x] Quality gates. (`src/modelserve/quality_gates.py` provides deterministic promotion gates: artifact existence, SHA-256 checksum match, 19-feature schema stability, finite metric bounds, validation PR-AUC >= 0.55, and regression tolerance <= 0.03.)
+- [x] Promotion audit events. (`model_promotion_audit` table persists atomic event records with event_type, previous/new versions, actor, reason, and full quality gate evaluations; administrative CLI `modelserve-lifecycle` executes promotions.)
+- [x] Rollback tests. (Verified transactional rollback in `tests/test_lifecycle.py` with end-to-end FastAPI test client verifying serving switchover, audit recording, and 503 readiness protection.)
 
 ## Phase 7 — Drift and feedback
 - [ ] Reference data/window.

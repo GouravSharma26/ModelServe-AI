@@ -1,4 +1,4 @@
-"""SQLAlchemy data models for model metadata and inference prediction events."""
+"""SQLAlchemy data models for model metadata, lifecycle audit, and inference prediction events."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ class Base(DeclarativeBase):
 
 
 class ModelVersionRecord(Base):
-    """Persisted metadata and evaluation manifest for a trained model version."""
+    """Persisted metadata, lifecycle stage, and evaluation manifest for a trained model version."""
 
     __tablename__ = "model_versions"
 
@@ -29,7 +29,9 @@ class ModelVersionRecord(Base):
         nullable=False,
     )
     manifest_json: Mapped[str] = mapped_column(Text, nullable=False)
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    stage: Mapped[str] = mapped_column(String(32), default="candidate", nullable=False)
+    mlflow_run_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -40,6 +42,40 @@ class ModelVersionRecord(Base):
             "dataset_fingerprint": self.dataset_fingerprint,
             "created_at_utc": self.created_at_utc.isoformat(),
             "is_active": self.is_active,
+            "stage": self.stage,
+            "mlflow_run_id": self.mlflow_run_id,
+        }
+
+
+class ModelPromotionAudit(Base):
+    """Immutable audit log for model promotion, rollback, and retirement events."""
+
+    __tablename__ = "model_promotion_audit"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    event_type: Mapped[str] = mapped_column(String(32), nullable=False)  # "promotion", "rollback", "demotion"
+    previous_model_version: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    new_model_version: Mapped[str] = mapped_column(String(128), index=True, nullable=False)
+    actor: Mapped[str] = mapped_column(String(128), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    quality_gate_results_json: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at_utc: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        index=True,
+        nullable=False,
+    )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "event_type": self.event_type,
+            "previous_model_version": self.previous_model_version,
+            "new_model_version": self.new_model_version,
+            "actor": self.actor,
+            "reason": self.reason,
+            "quality_gate_results_json": self.quality_gate_results_json,
+            "created_at_utc": self.created_at_utc.isoformat(),
         }
 
 
@@ -71,4 +107,3 @@ class PredictionRecord(Base):
             "latency_ms": self.latency_ms,
             "created_at_utc": self.created_at_utc.isoformat(),
         }
-

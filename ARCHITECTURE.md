@@ -102,6 +102,25 @@ Never store secrets, stack traces intended for internal logs, or raw invalid pay
 - drift_reports
 - prediction_feedback / labeled_outcomes
 
+### model_promotion_audit (Phase 6)
+- id (primary key)
+- event_type (`promotion`, `rollback`, `demotion`)
+- previous_model_version (nullable)
+- new_model_version (indexed)
+- actor (system, engineer, CI)
+- reason (textual justification)
+- quality_gate_results_json (evaluated gates and metrics)
+- created_at_utc (timestamp with timezone)
+
+## Model lifecycle and promotion workflow (Phase 6)
+1. **Experiment Tracking:** Training sessions record parameters, distinct validation metrics (`val_pr_auc`, `val_f1`, etc.), held-out test metrics (`test_pr_auc`, `test_f1`, etc.), and verified artifacts to MLflow (`modelserve-customer-churn` experiment) without logging customer PII.
+2. **Registration:** Models are registered in `model_versions` with stage `candidate` (not active).
+3. **Comparison:** Candidates are inspected against active model with metric deltas and schema validation.
+4. **Deterministic Quality Gates:** Candidates must meet minimum PR-AUC (>= 0.55), regression tolerance (<= 0.03), 19-feature schema match, non-retired status, and cryptographic SHA-256 match.
+5. **Transactional Promotion:** The administrative CLI (`modelserve-lifecycle`) atomically demotes the previous active model to `retired`, promotes the candidate to `active`, and logs to `model_promotion_audit`.
+6. **Safe Rollback:** Administrators can rollback to a previous version with SHA-256 integrity verification, updating active state and recording a rollback audit event.
+7. **Read-Only Serving:** The public FastAPI inference API dynamically resolves the designated active model at startup and remains strictly read-only.
+
 ## API contract (MVP)
 - `GET /health/live`: process is running; should not depend on database availability.
 - `GET /health/ready`: API can serve requests; verify model loaded and required dependencies available.

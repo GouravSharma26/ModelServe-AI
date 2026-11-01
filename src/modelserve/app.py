@@ -85,11 +85,25 @@ async def lifespan(app: FastAPI):
         except Exception as exc:
             logger.warning("Database setup failed: %s", exc)
 
-    # Initialize Model
+    # Initialize Model (resolve active model from lifecycle store if available)
     try:
+        model_ver_to_load = settings.model_version
+        if (not model_ver_to_load or model_ver_to_load.lower() == "active") and app.state.db_connected and app.state.session_factory:
+            try:
+                from modelserve.models import ModelVersionRecord
+                from sqlalchemy import select
+                with app.state.session_factory() as session:
+                    stmt = select(ModelVersionRecord).where(ModelVersionRecord.is_active.is_(True))
+                    active_rec = session.execute(stmt).scalar_one_or_none()
+                    if active_rec:
+                        model_ver_to_load = active_rec.version
+                        logger.info("Resolved active model version from lifecycle database: %s", model_ver_to_load)
+            except Exception as exc:
+                logger.warning("Could not query active model version from database: %s", exc)
+
         loaded_model = load_active_model(
             artifacts_dir=settings.artifacts_dir,
-            version=settings.model_version,
+            version=model_ver_to_load,
         )
         app.state.model = loaded_model
         app.state.is_ready = True

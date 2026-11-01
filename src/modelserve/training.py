@@ -117,6 +117,7 @@ def train(
     output_dir: Path,
     *,
     seed: int = RANDOM_SEED,
+    track_mlflow: bool = True,
 ) -> dict[str, Any]:
     """Train candidates, choose by validation PR-AUC/F1, test once, save outputs."""
     x = frame.drop(columns=[TARGET_COLUMN, *EXCLUDED_FEATURES])
@@ -196,6 +197,19 @@ def train(
     (version_dir / "evaluation.json").write_text(
         json.dumps(manifest["test_metrics"], indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
+
+    if track_mlflow:
+        try:
+            from modelserve.tracking import log_training_run
+            run_id = log_training_run(manifest, version_dir)
+            manifest["mlflow_run_id"] = run_id
+            (version_dir / "manifest.json").write_text(
+                json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+            )
+        except Exception as exc:
+            import logging
+            logging.getLogger("modelserve.training").warning("MLflow logging skipped or failed: %s", exc)
+
     return manifest
 
 

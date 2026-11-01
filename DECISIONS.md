@@ -62,4 +62,10 @@ Update this file when a decision changes. Do not silently change decisions that 
 **Reason:** Allows evaluators, interviewers, and recruiters to test realistic churn predictions without manually keying 19 features, while preserving data minimization and privacy by validating and parsing files entirely in the client browser without introducing a complex server-side batch ingestion service.
 **Consequences:** The frontend validates all 19 feature types and categorical constraints in JavaScript; users select individual customer records whose attributes populate the form and dispatch single-record requests to the existing `POST /v1/predictions` endpoint; onboarding completion state is saved to `localStorage`.
 
+## ADR-013: MLflow Experiment Tracking, Quality Gating, and Transactional Promotion
+**Decision:** Integrate MLflow for experiment tracking without requiring external server dependencies during model serving. Enforce deterministic quality gates (artifact integrity, schema stability, finite metric bounds, PR-AUC baseline >= 0.55, regression <= 0.03) and transactional promotion/rollback via PostgreSQL and the administrative CLI (`modelserve-lifecycle`).
+**Reason:** Decouples model development and training observability from runtime inference serving. Public inference endpoints remain strictly read-only and resilient (do not depend on external MLflow server availability), while administrative promotion and rollback are guarded by automated gates and recorded in an immutable audit table (`model_promotion_audit`).
+**Consequences:** Training runs automatically log parameters, distinct validation and test metrics, artifacts, and dataset fingerprints to MLflow. The database tracks lifecycle stages (`candidate`, `approved`, `active`, `retired`). The API loads the active model dynamically from the lifecycle store or explicit configuration with SHA-256 integrity verification.
+
+
 
