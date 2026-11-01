@@ -265,7 +265,10 @@ export default function App() {
       )}
 
       {/* Persistent Floating Help Button */}
-      <FloatingHelpButton onRestartTutorial={restartTutorial} />
+      <FloatingHelpButton
+        onRestartTutorial={restartTutorial}
+        tutorialActive={tutorialActive}
+      />
 
       {/* Top Header */}
       <header className="app-header">
