@@ -65,11 +65,18 @@ export default function TutorialController({
   onExit,
   currentStep,
   setCurrentStep,
+  predictionResult,
 }) {
   const [targetRect, setTargetRect] = useState(null);
+  const [actionBlockedMsg, setActionBlockedMsg] = useState(null);
   const cardRef = useRef(null);
 
   const stepData = TUTORIAL_STEPS[currentStep - 1] || TUTORIAL_STEPS[0];
+
+  // Clear any action blocked error when step changes or prediction completes
+  useEffect(() => {
+    setActionBlockedMsg(null);
+  }, [currentStep, predictionResult]);
 
   // Ensure appropriate tab is open for the current step
   useEffect(() => {
@@ -148,41 +155,41 @@ export default function TutorialController({
     };
   }, [updateTargetPosition]);
 
+  const handleNext = useCallback(() => {
+    if (currentStep === 4 && !predictionResult) {
+      setActionBlockedMsg('Please run a prediction first to generate inference results before exploring telemetry.');
+      return;
+    }
+    setActionBlockedMsg(null);
+    if (currentStep < TUTORIAL_STEPS.length) {
+      setCurrentStep(currentStep + 1);
+    } else {
+      onComplete();
+    }
+  }, [currentStep, predictionResult, setCurrentStep, onComplete]);
+
+  const handlePrev = useCallback(() => {
+    setActionBlockedMsg(null);
+    if (currentStep > 1) {
+      setCurrentStep(currentStep - 1);
+    }
+  }, [currentStep, setCurrentStep]);
+
   // Keyboard controls: Escape exits, ArrowRight advances, ArrowLeft goes back
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
         onExit();
       } else if (e.key === 'ArrowRight') {
-        if (currentStep < TUTORIAL_STEPS.length) {
-          setCurrentStep(currentStep + 1);
-        } else {
-          onComplete();
-        }
+        handleNext();
       } else if (e.key === 'ArrowLeft') {
-        if (currentStep > 1) {
-          setCurrentStep(currentStep - 1);
-        }
+        handlePrev();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentStep, onExit, onComplete, setCurrentStep]);
-
-  const handleNext = () => {
-    if (currentStep < TUTORIAL_STEPS.length) {
-      setCurrentStep(currentStep + 1);
-    } else {
-      onComplete();
-    }
-  };
-
-  const handlePrev = () => {
-    if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
-    }
-  };
+  }, [handleNext, handlePrev, onExit]);
 
   const content = (
     <div className="tutorial-overlay-wrapper">
@@ -235,6 +242,11 @@ export default function TutorialController({
           <div className="tutorial-action-hint">
             <strong>Tip:</strong> {stepData.actionHint}
           </div>
+          {actionBlockedMsg && (
+            <div className="tutorial-blocked-alert" role="alert">
+              <strong>Action Required:</strong> {actionBlockedMsg}
+            </div>
+          )}
         </div>
 
         <div className="tutorial-footer">

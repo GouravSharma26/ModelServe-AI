@@ -42,6 +42,7 @@ export default function App() {
 
   // Prediction Playground states
   const [features, setFeatures] = useState(INITIAL_FEATURES);
+  const [fieldErrors, setFieldErrors] = useState({});
   const [predictLoading, setPredictLoading] = useState(false);
   const [predictionResult, setPredictionResult] = useState(null);
   const [predictError, setPredictError] = useState(null);
@@ -131,10 +132,65 @@ export default function App() {
       ...prev,
       [name]: value,
     }));
+    if (fieldErrors[name]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[name];
+        return next;
+      });
+    }
+  };
+
+  // Client-side validation for numeric and monetary values
+  const validateNumericFeatures = (f) => {
+    const errors = {};
+
+    // Tenure (must be integer, non-negative)
+    if (f.tenure === '' || f.tenure === null || f.tenure === undefined) {
+      errors.tenure = 'Tenure is required.';
+    } else {
+      const t = Number(f.tenure);
+      if (isNaN(t) || !Number.isInteger(t) || t < 0) {
+        errors.tenure = 'Tenure must be a non-negative whole number (months).';
+      } else if (t > 120) {
+        errors.tenure = 'Tenure cannot exceed 120 months.';
+      }
+    }
+
+    // MonthlyCharges (must be valid finite float >= 0)
+    if (f.MonthlyCharges === '' || f.MonthlyCharges === null || f.MonthlyCharges === undefined) {
+      errors.MonthlyCharges = 'Monthly Charges is required.';
+    } else {
+      const m = Number(f.MonthlyCharges);
+      if (isNaN(m) || !isFinite(m) || m < 0) {
+        errors.MonthlyCharges = 'Monthly Charges must be a valid non-negative number.';
+      } else if (m > 1000) {
+        errors.MonthlyCharges = 'Monthly Charges exceeds maximum allowed threshold ($1,000).';
+      }
+    }
+
+    // TotalCharges (optional / nullable, but if supplied must be finite float >= 0)
+    if (f.TotalCharges !== '' && f.TotalCharges !== null && f.TotalCharges !== undefined) {
+      const tc = Number(f.TotalCharges);
+      if (isNaN(tc) || !isFinite(tc) || tc < 0) {
+        errors.TotalCharges = 'Total Charges must be a valid non-negative number.';
+      }
+    }
+
+    return errors;
   };
 
   // Execute inference request against API
   const executePrediction = async (featurePayload) => {
+    // Run validation first
+    const errors = validateNumericFeatures(featurePayload);
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setPredictError('Please resolve the numeric input validation errors highlighted below.');
+      return;
+    }
+
+    setFieldErrors({});
     setPredictLoading(true);
     setPredictError(null);
     setPredictionResult(null);
@@ -145,9 +201,14 @@ export default function App() {
       const payloadToSend = {
         ...featurePayload,
         SeniorCitizen: Number(featurePayload.SeniorCitizen),
-        tenure: Number(featurePayload.tenure),
-        MonthlyCharges: Number(featurePayload.MonthlyCharges),
-        TotalCharges: Number(featurePayload.TotalCharges),
+        tenure: parseInt(featurePayload.tenure, 10),
+        MonthlyCharges: parseFloat(featurePayload.MonthlyCharges),
+        TotalCharges:
+          featurePayload.TotalCharges !== '' &&
+          featurePayload.TotalCharges !== null &&
+          featurePayload.TotalCharges !== undefined
+            ? parseFloat(featurePayload.TotalCharges)
+            : null,
       };
 
       const res = await fetch(`${API_URL}/v1/predictions`, {
@@ -199,6 +260,7 @@ export default function App() {
           onExit={exitTutorial}
           currentStep={currentStep}
           setCurrentStep={setCurrentStep}
+          predictionResult={predictionResult}
         />
       )}
 
@@ -342,12 +404,15 @@ export default function App() {
 
             {/* CSV Sample Data & Inspection Workflow */}
             <CsvWorkflow
-              onSelectCustomer={(cust) => setFeatures(cust.features)}
+              onSelectCustomer={(cust) => {
+                setFeatures(cust.features);
+                setFieldErrors({});
+              }}
               onRunPrediction={(custFeatures) => executePrediction(custFeatures)}
               disabled={predictLoading}
             />
 
-            <form onSubmit={handlePredictSubmit} className="prediction-form">
+            <form onSubmit={handlePredictSubmit} className="prediction-form" noValidate>
               <div className="form-sections-grid">
                 {/* Column 1: Demographics & Account */}
                 <div className="form-section">
@@ -410,12 +475,16 @@ export default function App() {
                     <input
                       id="field-tenure"
                       type="number"
+                      step="1"
                       min="0"
                       max="120"
-                      className="field-control"
-                      value={features.tenure}
-                      onChange={(e) => handleFeatureChange('tenure', Number(e.target.value))}
+                      className={`field-control ${fieldErrors.tenure ? 'field-control-invalid' : ''}`}
+                      value={features.tenure ?? ''}
+                      onChange={(e) => handleFeatureChange('tenure', e.target.value)}
                     />
+                    {fieldErrors.tenure && (
+                      <span className="field-error-text">{fieldErrors.tenure}</span>
+                    )}
                   </div>
                 </div>
 
@@ -600,13 +669,15 @@ export default function App() {
                     <input
                       id="field-monthly"
                       type="number"
-                      step="0.05"
+                      step="any"
                       min="0"
-                      max="500"
-                      className="field-control"
-                      value={features.MonthlyCharges}
-                      onChange={(e) => handleFeatureChange('MonthlyCharges', Number(e.target.value))}
+                      className={`field-control ${fieldErrors.MonthlyCharges ? 'field-control-invalid' : ''}`}
+                      value={features.MonthlyCharges ?? ''}
+                      onChange={(e) => handleFeatureChange('MonthlyCharges', e.target.value)}
                     />
+                    {fieldErrors.MonthlyCharges && (
+                      <span className="field-error-text">{fieldErrors.MonthlyCharges}</span>
+                    )}
                   </div>
 
                   <div className="field-group">
@@ -614,13 +685,15 @@ export default function App() {
                     <input
                       id="field-total"
                       type="number"
-                      step="0.5"
+                      step="any"
                       min="0"
-                      max="20000"
-                      className="field-control"
-                      value={features.TotalCharges}
-                      onChange={(e) => handleFeatureChange('TotalCharges', Number(e.target.value))}
+                      className={`field-control ${fieldErrors.TotalCharges ? 'field-control-invalid' : ''}`}
+                      value={features.TotalCharges ?? ''}
+                      onChange={(e) => handleFeatureChange('TotalCharges', e.target.value)}
                     />
+                    {fieldErrors.TotalCharges && (
+                      <span className="field-error-text">{fieldErrors.TotalCharges}</span>
+                    )}
                   </div>
                 </div>
               </div>

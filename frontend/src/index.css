@@ -439,6 +439,23 @@ body {
   border-color: var(--border-focus);
 }
 
+.field-control.field-control-invalid {
+  border-color: var(--status-red);
+  background-color: rgba(239, 68, 68, 0.04);
+}
+
+.field-control.field-control-invalid:focus {
+  border-color: var(--status-red);
+  box-shadow: 0 0 0 1px var(--status-red);
+}
+
+.field-error-text {
+  font-size: 0.775rem;
+  color: var(--status-red-text);
+  margin-top: 0.35rem;
+  display: block;
+}
+
 .field-control option {
   background: var(--bg-surface-elevated);
   color: var(--text-primary);
@@ -1300,6 +1317,18 @@ body {
   padding: 0.5rem 0.75rem;
   border-radius: var(--radius-sm);
   border-left: 2px solid var(--accent);
+}
+
+.tutorial-blocked-alert {
+  font-size: 0.82rem;
+  color: var(--status-amber-text);
+  background: var(--status-amber-bg);
+  border: 1px solid var(--status-amber-border);
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm);
+  margin-top: 0.65rem;
+  line-height: 1.4;
+  border-left: 2px solid var(--status-amber);
 }
 
 .tutorial-footer {
