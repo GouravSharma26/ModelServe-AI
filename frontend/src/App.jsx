@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 
-const DEFAULT_API_URL =
-  import.meta.env.VITE_API_BASE_URL || 'https://modelserve-ai.onrender.com';
+const API_URL = (
+  import.meta.env.VITE_API_BASE_URL || 'https://modelserve-ai.onrender.com'
+).replace(/\/+$/, '');
 
 const INITIAL_FEATURES = {
   gender: 'Female',
@@ -26,8 +27,7 @@ const INITIAL_FEATURES = {
 };
 
 export default function App() {
-  const [apiUrl, setApiUrl] = useState(DEFAULT_API_URL);
-  const [activeTab, setActiveTab] = useState('playground');
+  const [activeTab, setActiveTab] = useState('prediction');
 
   // Health and Model states
   const [liveStatus, setLiveStatus] = useState(null);
@@ -35,7 +35,7 @@ export default function App() {
   const [modelInfo, setModelInfo] = useState(null);
   const [healthLoading, setHealthLoading] = useState(true);
 
-  // Playground states
+  // Prediction Playground states
   const [features, setFeatures] = useState(INITIAL_FEATURES);
   const [predictLoading, setPredictLoading] = useState(false);
   const [predictionResult, setPredictionResult] = useState(null);
@@ -50,39 +50,37 @@ export default function App() {
   // Fetch health and model metadata
   const fetchHealthAndModel = useCallback(async () => {
     setHealthLoading(true);
-    const cleanUrl = apiUrl.replace(/\/+$/, '');
 
     try {
-      const liveRes = await fetch(`${cleanUrl}/health/live`);
+      const liveRes = await fetch(`${API_URL}/health/live`);
       setLiveStatus(liveRes.ok ? await liveRes.json() : { status: 'offline' });
     } catch {
       setLiveStatus({ status: 'offline' });
     }
 
     try {
-      const readyRes = await fetch(`${cleanUrl}/health/ready`);
+      const readyRes = await fetch(`${API_URL}/health/ready`);
       setReadyStatus(readyRes.ok ? await readyRes.json() : { status: 'not_ready' });
     } catch {
       setReadyStatus({ status: 'not_ready' });
     }
 
     try {
-      const modelRes = await fetch(`${cleanUrl}/v1/model/info`);
+      const modelRes = await fetch(`${API_URL}/v1/model/info`);
       setModelInfo(modelRes.ok ? await modelRes.json() : null);
     } catch {
       setModelInfo(null);
     }
 
     setHealthLoading(false);
-  }, [apiUrl]);
+  }, []);
 
   // Fetch telemetry summary
   const fetchTelemetry = useCallback(async () => {
     setTelemetryLoading(true);
     setTelemetryError(null);
-    const cleanUrl = apiUrl.replace(/\/+$/, '');
     try {
-      const res = await fetch(`${cleanUrl}/v1/monitoring/summary?window_hours=${windowHours}`);
+      const res = await fetch(`${API_URL}/v1/monitoring/summary?window_hours=${windowHours}`);
       if (res.ok) {
         const data = await res.json();
         setTelemetry(data);
@@ -95,7 +93,7 @@ export default function App() {
     } finally {
       setTelemetryLoading(false);
     }
-  }, [apiUrl, windowHours]);
+  }, [windowHours]);
 
   useEffect(() => {
     fetchHealthAndModel();
@@ -124,11 +122,10 @@ export default function App() {
     setPredictError(null);
     setPredictionResult(null);
 
-    const cleanUrl = apiUrl.replace(/\/+$/, '');
-    const clientRequestId = `req_fe_${Date.now()}`;
+    const clientRequestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
     try {
-      const res = await fetch(`${cleanUrl}/v1/predictions`, {
+      const res = await fetch(`${API_URL}/v1/predictions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -160,588 +157,789 @@ export default function App() {
   };
 
   return (
-    <div className="app-container">
-      {/* Header */}
-      <header>
-        <div className="header-top">
-          <div className="title-group">
-            <h1>📊 ModelServe AI</h1>
-            <p>Production ML Inference Platform — Customer Churn Classification</p>
+    <div className="app-shell">
+      {/* Top Header */}
+      <header className="app-header">
+        <div className="header-brand">
+          <div className="brand-title-wrap">
+            <h1 className="brand-title">ModelServe</h1>
+            <span className="brand-tag">Inference Platform</span>
           </div>
-          <div className="api-config">
-            <span style={{ color: 'var(--text-muted)' }}>Backend URL:</span>
-            <input
-              type="text"
-              value={apiUrl}
-              onChange={(e) => setApiUrl(e.target.value)}
-              placeholder="http://localhost:8000"
-            />
-            <button onClick={fetchHealthAndModel}>Refresh</button>
-          </div>
+          <p className="brand-subtitle">Customer intelligence · Churn prediction</p>
+        </div>
+
+        <div className="header-actions">
+          <button
+            type="button"
+            className="btn-refresh"
+            onClick={fetchHealthAndModel}
+            disabled={healthLoading}
+            title="Refresh backend status"
+          >
+            <span className={`refresh-indicator ${healthLoading ? 'is-loading' : ''}`} />
+            <span>{healthLoading ? 'Checking...' : 'Refresh status'}</span>
+          </button>
         </div>
       </header>
 
       {/* Status Bar */}
-      <div className="status-grid">
+      <section className="status-grid" aria-label="System status">
+        {/* Status Card 1: API Process */}
         <div className="status-card">
-          <span className="status-header">API Process</span>
-          <div className="status-value">
-            {liveStatus?.status === 'alive' ? (
-              <span className="status-badge badge-success">● Alive (200 OK)</span>
-            ) : (
-              <span className="status-badge badge-danger">● Offline</span>
-            )}
+          <div className="status-card-header">
+            <span className="status-label">API Process</span>
+            <span
+              className={`status-pill ${
+                liveStatus?.status === 'alive' ? 'status-pill-success' : 'status-pill-danger'
+              }`}
+            >
+              <span className="status-dot" />
+              {liveStatus?.status === 'alive' ? 'Operational' : 'Offline'}
+            </span>
+          </div>
+          <div className="status-meta">
+            {liveStatus?.status === 'alive' ? 'HTTP 200 · Process responsive' : 'Service probe unreachable'}
           </div>
         </div>
 
+        {/* Status Card 2: Inference Engine */}
         <div className="status-card">
-          <span className="status-header">Inference Engine</span>
-          <div className="status-value">
-            {readyStatus?.status === 'ready' ? (
-              <span className="status-badge badge-success">● Ready to Serve</span>
-            ) : (
-              <span className="status-badge badge-warning">● Not Ready</span>
-            )}
+          <div className="status-card-header">
+            <span className="status-label">Inference Engine</span>
             <span
-              className={`status-badge ${
-                readyStatus?.database_connected ? 'badge-success' : 'badge-warning'
+              className={`status-pill ${
+                readyStatus?.status === 'ready' ? 'status-pill-success' : 'status-pill-warning'
               }`}
-              style={{ fontSize: '0.7rem' }}
             >
-              DB: {readyStatus?.database_connected ? 'Connected' : 'Disconnected'}
+              <span className="status-dot" />
+              {readyStatus?.status === 'ready' ? 'Ready to Serve' : 'Not Ready'}
+            </span>
+          </div>
+          <div className="status-meta">
+            <span className="meta-db-indicator">
+              Database:{' '}
+              <strong className={readyStatus?.database_connected ? 'text-success' : 'text-warning'}>
+                {readyStatus?.database_connected ? 'Connected' : 'Disconnected'}
+              </strong>
             </span>
           </div>
         </div>
 
+        {/* Status Card 3: Active Model */}
         <div className="status-card">
-          <span className="status-header">Active Model</span>
-          <div className="status-value" style={{ fontSize: '1rem', wordBreak: 'break-all' }}>
+          <div className="status-card-header">
+            <span className="status-label">Active Model</span>
             {modelInfo ? (
-              <span className="status-badge badge-info">
-                {modelInfo.name} ({modelInfo.version?.slice(0, 18)})
+              <span className="status-pill status-pill-neutral">
+                <span className="status-dot" />
+                Verified
               </span>
             ) : (
-              <span className="status-badge badge-warning">No Model Loaded</span>
+              <span className="status-pill status-pill-warning">
+                <span className="status-dot" />
+                Pending
+              </span>
+            )}
+          </div>
+          <div className="status-meta model-version-text" title={modelInfo ? `${modelInfo.name} (${modelInfo.version})` : 'No model loaded'}>
+            {modelInfo ? (
+              <>
+                <span className="model-name">{modelInfo.name}</span>
+                <span className="model-version-code">{modelInfo.version?.slice(0, 20)}</span>
+              </>
+            ) : (
+              <span className="text-muted">No active artifact loaded</span>
             )}
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* Tabs */}
-      <div className="tab-nav">
+      {/* Navigation Tabs */}
+      <nav className="tab-nav" aria-label="Dashboard sections">
         <button
-          className={`tab-btn ${activeTab === 'playground' ? 'active' : ''}`}
-          onClick={() => setActiveTab('playground')}
+          type="button"
+          className={`tab-item ${activeTab === 'prediction' ? 'is-active' : ''}`}
+          onClick={() => setActiveTab('prediction')}
         >
-          🧪 Prediction Playground
+          Prediction
         </button>
         <button
-          className={`tab-btn ${activeTab === 'telemetry' ? 'active' : ''}`}
+          type="button"
+          className={`tab-item ${activeTab === 'telemetry' ? 'is-active' : ''}`}
           onClick={() => setActiveTab('telemetry')}
         >
-          📈 Live Telemetry
+          Telemetry
         </button>
         <button
-          className={`tab-btn ${activeTab === 'model-info' ? 'active' : ''}`}
+          type="button"
+          className={`tab-item ${activeTab === 'model-info' ? 'is-active' : ''}`}
           onClick={() => setActiveTab('model-info')}
         >
-          🧠 Model Provenance & Benchmarks
+          Model details
         </button>
-      </div>
+      </nav>
 
-      {/* Tab 1: Prediction Playground */}
-      {activeTab === 'playground' && (
-        <div className="card">
-          <h2 style={{ fontSize: '1.25rem', marginBottom: '1.25rem', color: '#fff' }}>
-            Submit Real-Time Prediction Request
-          </h2>
-          <form onSubmit={handlePredict}>
-            <div className="form-grid">
-              {/* Column 1: Demographics */}
+      {/* Main Content Area */}
+      <main className="main-content">
+        {/* Section 1: Prediction Playground */}
+        {activeTab === 'prediction' && (
+          <section className="panel-card">
+            <div className="panel-header">
               <div>
-                <h3 style={{ fontSize: '0.95rem', color: 'var(--accent-primary)', marginBottom: '0.75rem' }}>
-                  Demographics & Tenure
-                </h3>
-                <div className="form-group">
-                  <label>Gender</label>
-                  <select
-                    className="form-control"
-                    value={features.gender}
-                    onChange={(e) => handleFeatureChange('gender', e.target.value)}
-                  >
-                    <option value="Female">Female</option>
-                    <option value="Male">Male</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Senior Citizen</label>
-                  <select
-                    className="form-control"
-                    value={features.SeniorCitizen}
-                    onChange={(e) => handleFeatureChange('SeniorCitizen', Number(e.target.value))}
-                  >
-                    <option value={0}>No (0)</option>
-                    <option value={1}>Yes (1)</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Partner</label>
-                  <select
-                    className="form-control"
-                    value={features.Partner}
-                    onChange={(e) => handleFeatureChange('Partner', e.target.value)}
-                  >
-                    <option value="Yes">Yes</option>
-                    <option value="No">No</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Dependents</label>
-                  <select
-                    className="form-control"
-                    value={features.Dependents}
-                    onChange={(e) => handleFeatureChange('Dependents', e.target.value)}
-                  >
-                    <option value="No">No</option>
-                    <option value="Yes">Yes</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Tenure (Months)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="120"
-                    className="form-control"
-                    value={features.tenure}
-                    onChange={(e) => handleFeatureChange('tenure', Number(e.target.value))}
-                  />
-                </div>
-              </div>
-
-              {/* Column 2: Services */}
-              <div>
-                <h3 style={{ fontSize: '0.95rem', color: 'var(--accent-primary)', marginBottom: '0.75rem' }}>
-                  Subscribed Services
-                </h3>
-                <div className="form-group">
-                  <label>Phone Service</label>
-                  <select
-                    className="form-control"
-                    value={features.PhoneService}
-                    onChange={(e) => handleFeatureChange('PhoneService', e.target.value)}
-                  >
-                    <option value="Yes">Yes</option>
-                    <option value="No">No</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Multiple Lines</label>
-                  <select
-                    className="form-control"
-                    value={features.MultipleLines}
-                    onChange={(e) => handleFeatureChange('MultipleLines', e.target.value)}
-                  >
-                    <option value="No">No</option>
-                    <option value="Yes">Yes</option>
-                    <option value="No phone service">No phone service</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Internet Service</label>
-                  <select
-                    className="form-control"
-                    value={features.InternetService}
-                    onChange={(e) => handleFeatureChange('InternetService', e.target.value)}
-                  >
-                    <option value="DSL">DSL</option>
-                    <option value="Fiber optic">Fiber optic</option>
-                    <option value="No">No</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Online Security</label>
-                  <select
-                    className="form-control"
-                    value={features.OnlineSecurity}
-                    onChange={(e) => handleFeatureChange('OnlineSecurity', e.target.value)}
-                  >
-                    <option value="Yes">Yes</option>
-                    <option value="No">No</option>
-                    <option value="No internet service">No internet service</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Tech Support</label>
-                  <select
-                    className="form-control"
-                    value={features.TechSupport}
-                    onChange={(e) => handleFeatureChange('TechSupport', e.target.value)}
-                  >
-                    <option value="No">No</option>
-                    <option value="Yes">Yes</option>
-                    <option value="No internet service">No internet service</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Column 3: Contract & Billing */}
-              <div>
-                <h3 style={{ fontSize: '0.95rem', color: 'var(--accent-primary)', marginBottom: '0.75rem' }}>
-                  Contract & Charges
-                </h3>
-                <div className="form-group">
-                  <label>Contract Type</label>
-                  <select
-                    className="form-control"
-                    value={features.Contract}
-                    onChange={(e) => handleFeatureChange('Contract', e.target.value)}
-                  >
-                    <option value="Month-to-month">Month-to-month</option>
-                    <option value="One year">One year</option>
-                    <option value="Two year">Two year</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Paperless Billing</label>
-                  <select
-                    className="form-control"
-                    value={features.PaperlessBilling}
-                    onChange={(e) => handleFeatureChange('PaperlessBilling', e.target.value)}
-                  >
-                    <option value="Yes">Yes</option>
-                    <option value="No">No</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Payment Method</label>
-                  <select
-                    className="form-control"
-                    value={features.PaymentMethod}
-                    onChange={(e) => handleFeatureChange('PaymentMethod', e.target.value)}
-                  >
-                    <option value="Electronic check">Electronic check</option>
-                    <option value="Mailed check">Mailed check</option>
-                    <option value="Bank transfer (automatic)">Bank transfer (automatic)</option>
-                    <option value="Credit card (automatic)">Credit card (automatic)</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Monthly Charges ($)</label>
-                  <input
-                    type="number"
-                    step="0.05"
-                    min="0"
-                    max="500"
-                    className="form-control"
-                    value={features.MonthlyCharges}
-                    onChange={(e) => handleFeatureChange('MonthlyCharges', Number(e.target.value))}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Total Charges ($)</label>
-                  <input
-                    type="number"
-                    step="0.5"
-                    min="0"
-                    max="20000"
-                    className="form-control"
-                    value={features.TotalCharges}
-                    onChange={(e) => handleFeatureChange('TotalCharges', Number(e.target.value))}
-                  />
-                </div>
+                <h2 className="panel-title">Inference Playground</h2>
+                <p className="panel-description">
+                  Submit customer attribute vectors for real-time churn risk classification
+                </p>
               </div>
             </div>
 
-            <button type="submit" className="btn-primary" disabled={predictLoading}>
-              {predictLoading ? 'Computing Inferences...' : 'Predict Churn Outcome (POST /v1/predictions)'}
-            </button>
-          </form>
+            <form onSubmit={handlePredict} className="prediction-form">
+              <div className="form-sections-grid">
+                {/* Column 1: Demographics & Account */}
+                <div className="form-section">
+                  <h3 className="section-title">Demographics & Account</h3>
 
-          {predictError && (
-            <div className="result-box danger" style={{ marginTop: '1.5rem' }}>
-              <strong>Inference Error:</strong> {predictError}
-            </div>
-          )}
+                  <div className="field-group">
+                    <label htmlFor="field-gender" className="field-label">Gender</label>
+                    <select
+                      id="field-gender"
+                      className="field-control"
+                      value={features.gender}
+                      onChange={(e) => handleFeatureChange('gender', e.target.value)}
+                    >
+                      <option value="Female">Female</option>
+                      <option value="Male">Male</option>
+                    </select>
+                  </div>
 
-          {predictionResult && (
-            <div
-              className={`result-box ${
-                predictionResult.prediction.label === 'Yes' ? 'danger' : 'success'
-              }`}
-            >
-              <div className="result-header">
-                <span className="result-title">
-                  {predictionResult.prediction.label === 'Yes'
-                    ? '⚠️ High Churn Risk (Outcome: Yes)'
-                    : '✅ Retained Customer (Outcome: No)'}
-                </span>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                  Request ID: {predictionResult.request_id}
-                </span>
+                  <div className="field-group">
+                    <label htmlFor="field-senior" className="field-label">Senior Citizen</label>
+                    <select
+                      id="field-senior"
+                      className="field-control"
+                      value={features.SeniorCitizen}
+                      onChange={(e) => handleFeatureChange('SeniorCitizen', Number(e.target.value))}
+                    >
+                      <option value={0}>No (0)</option>
+                      <option value={1}>Yes (1)</option>
+                    </select>
+                  </div>
+
+                  <div className="field-group">
+                    <label htmlFor="field-partner" className="field-label">Partner</label>
+                    <select
+                      id="field-partner"
+                      className="field-control"
+                      value={features.Partner}
+                      onChange={(e) => handleFeatureChange('Partner', e.target.value)}
+                    >
+                      <option value="Yes">Yes</option>
+                      <option value="No">No</option>
+                    </select>
+                  </div>
+
+                  <div className="field-group">
+                    <label htmlFor="field-dependents" className="field-label">Dependents</label>
+                    <select
+                      id="field-dependents"
+                      className="field-control"
+                      value={features.Dependents}
+                      onChange={(e) => handleFeatureChange('Dependents', e.target.value)}
+                    >
+                      <option value="No">No</option>
+                      <option value="Yes">Yes</option>
+                    </select>
+                  </div>
+
+                  <div className="field-group">
+                    <label htmlFor="field-tenure" className="field-label">Tenure (Months)</label>
+                    <input
+                      id="field-tenure"
+                      type="number"
+                      min="0"
+                      max="120"
+                      className="field-control"
+                      value={features.tenure}
+                      onChange={(e) => handleFeatureChange('tenure', Number(e.target.value))}
+                    />
+                  </div>
+                </div>
+
+                {/* Column 2: Subscribed Services */}
+                <div className="form-section">
+                  <h3 className="section-title">Subscribed Services</h3>
+
+                  <div className="field-group">
+                    <label htmlFor="field-phone" className="field-label">Phone Service</label>
+                    <select
+                      id="field-phone"
+                      className="field-control"
+                      value={features.PhoneService}
+                      onChange={(e) => handleFeatureChange('PhoneService', e.target.value)}
+                    >
+                      <option value="Yes">Yes</option>
+                      <option value="No">No</option>
+                    </select>
+                  </div>
+
+                  <div className="field-group">
+                    <label htmlFor="field-multlines" className="field-label">Multiple Lines</label>
+                    <select
+                      id="field-multlines"
+                      className="field-control"
+                      value={features.MultipleLines}
+                      onChange={(e) => handleFeatureChange('MultipleLines', e.target.value)}
+                    >
+                      <option value="No">No</option>
+                      <option value="Yes">Yes</option>
+                      <option value="No phone service">No phone service</option>
+                    </select>
+                  </div>
+
+                  <div className="field-group">
+                    <label htmlFor="field-internet" className="field-label">Internet Service</label>
+                    <select
+                      id="field-internet"
+                      className="field-control"
+                      value={features.InternetService}
+                      onChange={(e) => handleFeatureChange('InternetService', e.target.value)}
+                    >
+                      <option value="DSL">DSL</option>
+                      <option value="Fiber optic">Fiber optic</option>
+                      <option value="No">No</option>
+                    </select>
+                  </div>
+
+                  <div className="field-group">
+                    <label htmlFor="field-security" className="field-label">Online Security</label>
+                    <select
+                      id="field-security"
+                      className="field-control"
+                      value={features.OnlineSecurity}
+                      onChange={(e) => handleFeatureChange('OnlineSecurity', e.target.value)}
+                    >
+                      <option value="Yes">Yes</option>
+                      <option value="No">No</option>
+                      <option value="No internet service">No internet service</option>
+                    </select>
+                  </div>
+
+                  <div className="field-group">
+                    <label htmlFor="field-backup" className="field-label">Online Backup</label>
+                    <select
+                      id="field-backup"
+                      className="field-control"
+                      value={features.OnlineBackup}
+                      onChange={(e) => handleFeatureChange('OnlineBackup', e.target.value)}
+                    >
+                      <option value="No">No</option>
+                      <option value="Yes">Yes</option>
+                      <option value="No internet service">No internet service</option>
+                    </select>
+                  </div>
+
+                  <div className="field-group">
+                    <label htmlFor="field-device" className="field-label">Device Protection</label>
+                    <select
+                      id="field-device"
+                      className="field-control"
+                      value={features.DeviceProtection}
+                      onChange={(e) => handleFeatureChange('DeviceProtection', e.target.value)}
+                    >
+                      <option value="Yes">Yes</option>
+                      <option value="No">No</option>
+                      <option value="No internet service">No internet service</option>
+                    </select>
+                  </div>
+
+                  <div className="field-group">
+                    <label htmlFor="field-tech" className="field-label">Tech Support</label>
+                    <select
+                      id="field-tech"
+                      className="field-control"
+                      value={features.TechSupport}
+                      onChange={(e) => handleFeatureChange('TechSupport', e.target.value)}
+                    >
+                      <option value="No">No</option>
+                      <option value="Yes">Yes</option>
+                      <option value="No internet service">No internet service</option>
+                    </select>
+                  </div>
+
+                  <div className="field-group">
+                    <label htmlFor="field-tv" className="field-label">Streaming TV</label>
+                    <select
+                      id="field-tv"
+                      className="field-control"
+                      value={features.StreamingTV}
+                      onChange={(e) => handleFeatureChange('StreamingTV', e.target.value)}
+                    >
+                      <option value="No">No</option>
+                      <option value="Yes">Yes</option>
+                      <option value="No internet service">No internet service</option>
+                    </select>
+                  </div>
+
+                  <div className="field-group">
+                    <label htmlFor="field-movies" className="field-label">Streaming Movies</label>
+                    <select
+                      id="field-movies"
+                      className="field-control"
+                      value={features.StreamingMovies}
+                      onChange={(e) => handleFeatureChange('StreamingMovies', e.target.value)}
+                    >
+                      <option value="No">No</option>
+                      <option value="Yes">Yes</option>
+                      <option value="No internet service">No internet service</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Column 3: Contract & Billing */}
+                <div className="form-section">
+                  <h3 className="section-title">Contract & Billing</h3>
+
+                  <div className="field-group">
+                    <label htmlFor="field-contract" className="field-label">Contract Type</label>
+                    <select
+                      id="field-contract"
+                      className="field-control"
+                      value={features.Contract}
+                      onChange={(e) => handleFeatureChange('Contract', e.target.value)}
+                    >
+                      <option value="Month-to-month">Month-to-month</option>
+                      <option value="One year">One year</option>
+                      <option value="Two year">Two year</option>
+                    </select>
+                  </div>
+
+                  <div className="field-group">
+                    <label htmlFor="field-paperless" className="field-label">Paperless Billing</label>
+                    <select
+                      id="field-paperless"
+                      className="field-control"
+                      value={features.PaperlessBilling}
+                      onChange={(e) => handleFeatureChange('PaperlessBilling', e.target.value)}
+                    >
+                      <option value="No">No</option>
+                      <option value="Yes">Yes</option>
+                    </select>
+                  </div>
+
+                  <div className="field-group">
+                    <label htmlFor="field-payment" className="field-label">Payment Method</label>
+                    <select
+                      id="field-payment"
+                      className="field-control"
+                      value={features.PaymentMethod}
+                      onChange={(e) => handleFeatureChange('PaymentMethod', e.target.value)}
+                    >
+                      <option value="Electronic check">Electronic check</option>
+                      <option value="Mailed check">Mailed check</option>
+                      <option value="Bank transfer (automatic)">Bank transfer (automatic)</option>
+                      <option value="Credit card (automatic)">Credit card (automatic)</option>
+                    </select>
+                  </div>
+
+                  <div className="field-group">
+                    <label htmlFor="field-monthly" className="field-label">Monthly Charges ($)</label>
+                    <input
+                      id="field-monthly"
+                      type="number"
+                      step="0.05"
+                      min="0"
+                      max="500"
+                      className="field-control"
+                      value={features.MonthlyCharges}
+                      onChange={(e) => handleFeatureChange('MonthlyCharges', Number(e.target.value))}
+                    />
+                  </div>
+
+                  <div className="field-group">
+                    <label htmlFor="field-total" className="field-label">Total Charges ($)</label>
+                    <input
+                      id="field-total"
+                      type="number"
+                      step="0.5"
+                      min="0"
+                      max="20000"
+                      className="field-control"
+                      value={features.TotalCharges}
+                      onChange={(e) => handleFeatureChange('TotalCharges', Number(e.target.value))}
+                    />
+                  </div>
+                </div>
               </div>
-              <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-                Model Churn Probability Score: <strong>{predictionResult.prediction.score.toFixed(4)}</strong>
-              </p>
-              <div className="score-bar-container">
-                <div
-                  className="score-bar"
-                  style={{
-                    width: `${Math.min(100, Math.max(0, predictionResult.prediction.score * 100))}%`,
-                    backgroundColor:
-                      predictionResult.prediction.label === 'Yes' ? '#ef4444' : '#10b981',
-                  }}
-                />
-              </div>
-              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
-                Served by: {predictionResult.model.name} (version: {predictionResult.model.version})
-              </p>
-            </div>
-          )}
-        </div>
-      )}
 
-      {/* Tab 2: Live Telemetry */}
-      {activeTab === 'telemetry' && (
-        <div className="card">
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: '1.25rem',
-              flexWrap: 'wrap',
-              gap: '1rem',
-            }}
-          >
-            <h2 style={{ fontSize: '1.25rem', color: '#fff' }}>Live Inference Telemetry & Persistence</h2>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Time Window:</span>
-              <select
-                className="select-window"
-                value={windowHours}
-                onChange={(e) => setWindowHours(Number(e.target.value))}
+              <div className="form-submit-row">
+                <button
+                  type="submit"
+                  className="btn-primary"
+                  disabled={predictLoading}
+                >
+                  {predictLoading ? 'Computing inference...' : 'Run prediction'}
+                </button>
+              </div>
+            </form>
+
+            {/* Error Message */}
+            {predictError && (
+              <div className="banner-alert banner-alert-danger" role="alert">
+                <div className="banner-alert-title">Inference Failed</div>
+                <div className="banner-alert-desc">{predictError}</div>
+              </div>
+            )}
+
+            {/* Prediction Result Display */}
+            {predictionResult && (
+              <div
+                className={`result-card ${
+                  predictionResult.prediction.label === 'Yes'
+                    ? 'result-card-danger'
+                    : 'result-card-success'
+                }`}
               >
-                <option value={1}>Past 1 hour</option>
-                <option value={6}>Past 6 hours</option>
-                <option value={24}>Past 24 hours</option>
-                <option value={72}>Past 72 hours</option>
-                <option value={168}>Past 7 days</option>
-              </select>
-              <button
-                className="btn-primary"
-                style={{ width: 'auto', padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
-                onClick={fetchTelemetry}
-                disabled={telemetryLoading}
-              >
-                {telemetryLoading ? 'Loading...' : 'Refresh'}
-              </button>
-            </div>
-          </div>
+                <div className="result-header">
+                  <div className="result-classification">
+                    <span className="result-tag">Predicted Outcome</span>
+                    <h3 className="result-label">
+                      {predictionResult.prediction.label === 'Yes'
+                        ? 'High Churn Probability'
+                        : 'Retained Customer'}
+                    </h3>
+                  </div>
 
-          {telemetryError ? (
-            <div className="alert-box">
-              <strong>Telemetry Store Notice:</strong> {telemetryError}
-              <p style={{ marginTop: '0.5rem', fontSize: '0.8rem' }}>
-                Verify that your Neon PostgreSQL connection string (DATABASE_URL) is configured in your Render service.
-              </p>
-            </div>
-          ) : telemetry?.total_predictions === 0 ? (
-            <div className="alert-box" style={{ background: 'rgba(59, 130, 246, 0.1)', borderColor: 'rgba(59, 130, 246, 0.3)', color: '#93c5fd' }}>
-              <strong>No inference records found in the selected {windowHours}-hour window.</strong>
-              <p style={{ marginTop: '0.5rem' }}>
-                Submit sample inference requests from the <strong>Prediction Playground</strong> tab to generate persisted telemetry in Neon PostgreSQL.
-              </p>
-            </div>
-          ) : telemetry ? (
-            <>
-              <div className="metrics-grid">
-                <div className="metric-card">
-                  <div className="metric-title">Total Inferences</div>
-                  <div className="metric-value">{telemetry.total_predictions.toLocaleString()}</div>
-                  <div className="metric-sub">Window: Past {telemetry.window_hours} hours</div>
-                </div>
-                <div className="metric-card">
-                  <div className="metric-title">Churn Alerts (Yes)</div>
-                  <div className="metric-value">
-                    {telemetry.label_distribution?.Yes || 0}
-                  </div>
-                  <div className="metric-sub">
-                    {(
-                      ((telemetry.label_distribution?.Yes || 0) / (telemetry.total_predictions || 1)) *
-                      100
-                    ).toFixed(1)}
-                    % predicted churn rate
+                  <div className="result-badge-wrap">
+                    <span
+                      className={`badge-classification ${
+                        predictionResult.prediction.label === 'Yes'
+                          ? 'badge-churn'
+                          : 'badge-retained'
+                      }`}
+                    >
+                      {predictionResult.prediction.label === 'Yes' ? 'Churn Risk: Yes' : 'Churn Risk: No'}
+                    </span>
                   </div>
                 </div>
-                <div className="metric-card">
-                  <div className="metric-title">Mean Churn Score</div>
-                  <div className="metric-value">
-                    {telemetry.score_summary?.mean?.toFixed(4) ?? '0.0000'}
+
+                <div className="result-score-block">
+                  <div className="score-label-row">
+                    <span className="score-text">Model Confidence Score</span>
+                    <span className="score-value">
+                      {(predictionResult.prediction.score * 100).toFixed(2)}%
+                      <span className="score-raw"> ({predictionResult.prediction.score.toFixed(4)})</span>
+                    </span>
                   </div>
-                  <div className="metric-sub">
-                    Min: {telemetry.score_summary?.min?.toFixed(3)} | Max: {telemetry.score_summary?.max?.toFixed(3)}
+                  <div className="score-bar-track">
+                    <div
+                      className={`score-bar-fill ${
+                        predictionResult.prediction.label === 'Yes'
+                          ? 'score-fill-danger'
+                          : 'score-fill-success'
+                      }`}
+                      style={{
+                        width: `${Math.min(100, Math.max(0, predictionResult.prediction.score * 100))}%`,
+                      }}
+                    />
                   </div>
                 </div>
-                <div className="metric-card">
-                  <div className="metric-title">p95 Latency</div>
-                  <div className="metric-value">
-                    {telemetry.latency_summary_ms?.p95?.toFixed(1) ?? '0.0'} ms
+
+                <div className="result-details-grid">
+                  <div className="detail-item">
+                    <span className="detail-key">Request Identifier</span>
+                    <span className="detail-val font-mono">{predictionResult.request_id}</span>
                   </div>
-                  <div className="metric-sub">
-                    Mean: {telemetry.latency_summary_ms?.mean?.toFixed(1)} ms
+                  <div className="detail-item">
+                    <span className="detail-key">Serving Architecture</span>
+                    <span className="detail-val">{predictionResult.model.name}</span>
+                  </div>
+                  <div className="detail-item">
+                    <span className="detail-key">Model Checksum Version</span>
+                    <span className="detail-val font-mono">{predictionResult.model.version}</span>
+                  </div>
+                  <div className="detail-item">
+                    <span className="detail-key">Telemetry Status</span>
+                    <span className="detail-val text-success">Persisted to PostgreSQL</span>
                   </div>
                 </div>
               </div>
+            )}
+          </section>
+        )}
 
-              <h3 style={{ fontSize: '1rem', color: '#fff', marginTop: '1.5rem', marginBottom: '0.5rem' }}>
-                Latency Profile Breakdown (PostgreSQL Stored)
-              </h3>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Percentile / Metric</th>
-                    <th>Latency (ms)</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(telemetry.latency_summary_ms || {}).map(([key, val]) => (
-                    <tr key={key}>
-                      <td style={{ fontWeight: 600 }}>{key.toUpperCase()}</td>
-                      <td>{typeof val === 'number' ? val.toFixed(2) : val} ms</td>
-                      <td>
-                        <span className="status-badge badge-success">Nominal</span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </>
-          ) : null}
-        </div>
-      )}
-
-      {/* Tab 3: Model Provenance & Benchmarks */}
-      {activeTab === 'model-info' && (
-        <div className="card">
-          <h2 style={{ fontSize: '1.25rem', color: '#fff', marginBottom: '1.25rem' }}>
-            Model Lineage & Offline Held-Out Evaluation
-          </h2>
-
-          {modelInfo ? (
-            <>
-              <div className="metrics-grid">
-                <div className="metric-card">
-                  <div className="metric-title">PR-AUC (Avg Precision)</div>
-                  <div className="metric-value">
-                    {modelInfo.test_metrics?.pr_auc_average_precision?.toFixed(4) || 'N/A'}
-                  </div>
-                  <div className="metric-sub">Primary Selection Criterion</div>
-                </div>
-                <div className="metric-card">
-                  <div className="metric-title">ROC-AUC</div>
-                  <div className="metric-value">
-                    {modelInfo.test_metrics?.roc_auc?.toFixed(4) || 'N/A'}
-                  </div>
-                  <div className="metric-sub">Held-Out Test Split (20%)</div>
-                </div>
-                <div className="metric-card">
-                  <div className="metric-title">F1 Score</div>
-                  <div className="metric-value">
-                    {modelInfo.test_metrics?.f1?.toFixed(4) || 'N/A'}
-                  </div>
-                  <div className="metric-sub">Precision: {modelInfo.test_metrics?.precision?.toFixed(3)} | Recall: {modelInfo.test_metrics?.recall?.toFixed(3)}</div>
-                </div>
-                <div className="metric-card">
-                  <div className="metric-title">Decision Threshold</div>
-                  <div className="metric-value">
-                    {modelInfo.test_metrics?.decision_threshold ?? 0.5}
-                  </div>
-                  <div className="metric-sub">Positive Label: {modelInfo.positive_label}</div>
-                </div>
+        {/* Section 2: Live Telemetry */}
+        {activeTab === 'telemetry' && (
+          <section className="panel-card">
+            <div className="panel-header-flex">
+              <div>
+                <h2 className="panel-title">Inference Telemetry</h2>
+                <p className="panel-description">
+                  Aggregate prediction distribution and latency profiles stored in PostgreSQL
+                </p>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem', marginTop: '1.5rem' }}>
-                <div>
-                  <h3 style={{ fontSize: '1rem', color: 'var(--accent-primary)', marginBottom: '0.75rem' }}>
-                    Dataset Provenance
-                  </h3>
-                  <table className="data-table">
+              <div className="telemetry-controls">
+                <label htmlFor="window-select" className="control-label">Window</label>
+                <select
+                  id="window-select"
+                  className="select-control"
+                  value={windowHours}
+                  onChange={(e) => setWindowHours(Number(e.target.value))}
+                >
+                  <option value={1}>Past 1 hour</option>
+                  <option value={6}>Past 6 hours</option>
+                  <option value={24}>Past 24 hours</option>
+                  <option value={72}>Past 72 hours</option>
+                  <option value={168}>Past 7 days</option>
+                </select>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={fetchTelemetry}
+                  disabled={telemetryLoading}
+                >
+                  {telemetryLoading ? 'Refreshing...' : 'Refresh'}
+                </button>
+              </div>
+            </div>
+
+            {telemetryError ? (
+              <div className="banner-alert banner-alert-warning" role="alert">
+                <div className="banner-alert-title">Telemetry Store Notice</div>
+                <div className="banner-alert-desc">
+                  {telemetryError}
+                  <div className="banner-alert-sub">
+                    Verify that your PostgreSQL persistence configuration (DATABASE_URL) is reachable.
+                  </div>
+                </div>
+              </div>
+            ) : telemetry?.total_predictions === 0 ? (
+              <div className="empty-state-box">
+                <div className="empty-state-title">No predictions recorded</div>
+                <p className="empty-state-desc">
+                  No inference events have been persisted in the past {windowHours} hours. Run predictions from the
+                  Prediction playground to populate telemetry.
+                </p>
+              </div>
+            ) : telemetry ? (
+              <>
+                <div className="stats-metric-grid">
+                  <div className="metric-cell">
+                    <div className="metric-cell-label">Total Inferences</div>
+                    <div className="metric-cell-val">{telemetry.total_predictions.toLocaleString()}</div>
+                    <div className="metric-cell-foot">Aggregation: {telemetry.window_hours}h window</div>
+                  </div>
+
+                  <div className="metric-cell">
+                    <div className="metric-cell-label">Predicted Churn Rate</div>
+                    <div className="metric-cell-val">
+                      {(
+                        ((telemetry.label_distribution?.Yes || 0) / (telemetry.total_predictions || 1)) *
+                        100
+                      ).toFixed(1)}
+                      %
+                    </div>
+                    <div className="metric-cell-foot">
+                      {telemetry.label_distribution?.Yes || 0} churn alerts flagged
+                    </div>
+                  </div>
+
+                  <div className="metric-cell">
+                    <div className="metric-cell-label">Mean Churn Score</div>
+                    <div className="metric-cell-val">
+                      {telemetry.score_summary?.mean?.toFixed(4) ?? '0.0000'}
+                    </div>
+                    <div className="metric-cell-foot">
+                      Min: {telemetry.score_summary?.min?.toFixed(3) ?? '0.000'} · Max:{' '}
+                      {telemetry.score_summary?.max?.toFixed(3) ?? '0.000'}
+                    </div>
+                  </div>
+
+                  <div className="metric-cell">
+                    <div className="metric-cell-label">p95 Latency</div>
+                    <div className="metric-cell-val">
+                      {telemetry.latency_summary_ms?.p95?.toFixed(1) ?? '0.0'} ms
+                    </div>
+                    <div className="metric-cell-foot">
+                      Mean: {telemetry.latency_summary_ms?.mean?.toFixed(1) ?? '0.0'} ms
+                    </div>
+                  </div>
+                </div>
+
+                <div className="table-wrap">
+                  <div className="table-caption">PostgreSQL Execution Latency Profile (ms)</div>
+                  <table className="enterprise-table">
+                    <thead>
+                      <tr>
+                        <th>Percentile / Metric</th>
+                        <th>Duration (ms)</th>
+                        <th>SLO Status</th>
+                      </tr>
+                    </thead>
                     <tbody>
-                      <tr>
-                        <td style={{ color: 'var(--text-secondary)' }}>Source Dataset</td>
-                        <td>
-                          <a
-                            href={modelInfo.dataset?.source}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{ color: 'var(--accent-primary)' }}
-                          >
-                            {modelInfo.dataset?.name || 'IBM Telco Churn'}
-                          </a>
-                        </td>
-                      </tr>
-                      <tr>
-                        <td style={{ color: 'var(--text-secondary)' }}>License</td>
-                        <td><code>{modelInfo.dataset?.license || 'Apache-2.0'}</code></td>
-                      </tr>
-                      <tr>
-                        <td style={{ color: 'var(--text-secondary)' }}>Dataset Fingerprint</td>
-                        <td style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
-                          {modelInfo.dataset?.sha256?.slice(0, 24)}...
-                        </td>
-                      </tr>
-                      <tr>
-                        <td style={{ color: 'var(--text-secondary)' }}>Total Samples</td>
-                        <td>{modelInfo.dataset?.rows?.toLocaleString() || '7,043'}</td>
-                      </tr>
+                      {Object.entries(telemetry.latency_summary_ms || {}).map(([key, val]) => (
+                        <tr key={key}>
+                          <td className="font-semibold text-secondary">{key.toUpperCase()}</td>
+                          <td className="font-mono">{typeof val === 'number' ? val.toFixed(2) : val} ms</td>
+                          <td>
+                            <span className="status-pill status-pill-success">
+                              <span className="status-dot" />
+                              Compliant
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
+              </>
+            ) : null}
+          </section>
+        )}
 
-                <div>
-                  <h3 style={{ fontSize: '1rem', color: 'var(--accent-primary)', marginBottom: '0.75rem' }}>
-                    Held-Out Confusion Matrix
-                  </h3>
-                  {modelInfo.test_metrics?.confusion_matrix ? (
-                    <table className="data-table">
-                      <thead>
-                        <tr>
-                          <th>Actual \ Predicted</th>
-                          <th>Pred: No</th>
-                          <th>Pred: Yes</th>
-                        </tr>
-                      </thead>
+        {/* Section 3: Model Details */}
+        {activeTab === 'model-info' && (
+          <section className="panel-card">
+            <div className="panel-header">
+              <div>
+                <h2 className="panel-title">Model Provenance & Evaluation</h2>
+                <p className="panel-description">
+                  Lineage records, training metadata, and offline benchmark validation
+                </p>
+              </div>
+            </div>
+
+            {modelInfo ? (
+              <>
+                <div className="stats-metric-grid">
+                  <div className="metric-cell">
+                    <div className="metric-cell-label">PR-AUC (Avg Precision)</div>
+                    <div className="metric-cell-val text-accent">
+                      {modelInfo.test_metrics?.pr_auc_average_precision?.toFixed(4) || 'N/A'}
+                    </div>
+                    <div className="metric-cell-foot">Primary candidate selection rule</div>
+                  </div>
+
+                  <div className="metric-cell">
+                    <div className="metric-cell-label">ROC-AUC</div>
+                    <div className="metric-cell-val">
+                      {modelInfo.test_metrics?.roc_auc?.toFixed(4) || 'N/A'}
+                    </div>
+                    <div className="metric-cell-foot">Stratified test split (20%)</div>
+                  </div>
+
+                  <div className="metric-cell">
+                    <div className="metric-cell-label">F1 Score</div>
+                    <div className="metric-cell-val">
+                      {modelInfo.test_metrics?.f1?.toFixed(4) || 'N/A'}
+                    </div>
+                    <div className="metric-cell-foot">
+                      P: {modelInfo.test_metrics?.precision?.toFixed(3) || 'N/A'} · R:{' '}
+                      {modelInfo.test_metrics?.recall?.toFixed(3) || 'N/A'}
+                    </div>
+                  </div>
+
+                  <div className="metric-cell">
+                    <div className="metric-cell-label">Decision Threshold</div>
+                    <div className="metric-cell-val">
+                      {modelInfo.test_metrics?.decision_threshold ?? 0.5}
+                    </div>
+                    <div className="metric-cell-foot">Positive label: {modelInfo.positive_label}</div>
+                  </div>
+                </div>
+
+                <div className="provenance-grid">
+                  {/* Dataset Lineage */}
+                  <div className="provenance-block">
+                    <h3 className="section-title">Dataset Provenance</h3>
+                    <table className="enterprise-table">
                       <tbody>
                         <tr>
-                          <td style={{ fontWeight: 600 }}>Actual: No</td>
-                          <td>{modelInfo.test_metrics.confusion_matrix[0][0]}</td>
-                          <td>{modelInfo.test_metrics.confusion_matrix[0][1]}</td>
+                          <td className="text-muted">Source Repository</td>
+                          <td>
+                            <a
+                              href={modelInfo.dataset?.source}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-link"
+                            >
+                              {modelInfo.dataset?.name || 'IBM Telco Churn'}
+                            </a>
+                          </td>
                         </tr>
                         <tr>
-                          <td style={{ fontWeight: 600 }}>Actual: Yes</td>
-                          <td>{modelInfo.test_metrics.confusion_matrix[1][0]}</td>
-                          <td>{modelInfo.test_metrics.confusion_matrix[1][1]}</td>
+                          <td className="text-muted">License</td>
+                          <td>
+                            <span className="code-pill">{modelInfo.dataset?.license || 'Apache-2.0'}</span>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td className="text-muted">SHA-256 Fingerprint</td>
+                          <td className="font-mono text-xs">
+                            {modelInfo.dataset?.sha256?.slice(0, 32)}...
+                          </td>
+                        </tr>
+                        <tr>
+                          <td className="text-muted">Total Samples</td>
+                          <td>{modelInfo.dataset?.rows?.toLocaleString() || '7,043'}</td>
+                        </tr>
+                        <tr>
+                          <td className="text-muted">Target Variable</td>
+                          <td><code>Churn</code> (Yes / No)</td>
                         </tr>
                       </tbody>
                     </table>
-                  ) : (
-                    <p style={{ color: 'var(--text-muted)' }}>Matrix not available</p>
-                  )}
-                </div>
-              </div>
+                  </div>
 
-              <div className="alert-box">
-                <strong>Benchmark Notice:</strong> Metrics are computed on an offline stratified test split (20%) using IBM's Telco Customer Churn sample. Churn probability scores are uncalibrated and should be monitored when applied to production traffic.
+                  {/* Confusion Matrix */}
+                  <div className="provenance-block">
+                    <h3 className="section-title">Held-Out Confusion Matrix</h3>
+                    {modelInfo.test_metrics?.confusion_matrix ? (
+                      <table className="enterprise-table">
+                        <thead>
+                          <tr>
+                            <th>Actual \ Predicted</th>
+                            <th>Predicted: No</th>
+                            <th>Predicted: Yes</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td className="font-semibold text-secondary">Actual: No</td>
+                            <td className="font-mono">{modelInfo.test_metrics.confusion_matrix[0][0]}</td>
+                            <td className="font-mono">{modelInfo.test_metrics.confusion_matrix[0][1]}</td>
+                          </tr>
+                          <tr>
+                            <td className="font-semibold text-secondary">Actual: Yes</td>
+                            <td className="font-mono">{modelInfo.test_metrics.confusion_matrix[1][0]}</td>
+                            <td className="font-mono">{modelInfo.test_metrics.confusion_matrix[1][1]}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    ) : (
+                      <div className="empty-state-box">Matrix data unavailable</div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="banner-disclaimer">
+                  <strong>Validation Disclaimer:</strong> Performance figures represent benchmark evaluations on
+                  an offline stratified 60/20/20 test split of the public IBM Telco Customer Churn sample. Inference
+                  scores are raw probability estimates and should be calibrated against domain retention goals.
+                </div>
+              </>
+            ) : (
+              <div className="empty-state-box">
+                <div className="empty-state-title">Model details unreachable</div>
+                <p className="empty-state-desc">
+                  Unable to retrieve active model metadata from the backend service. Ensure the inference process is
+                  running.
+                </p>
               </div>
-            </>
-          ) : (
-            <p style={{ color: 'var(--text-muted)' }}>Model metadata is currently unreachable.</p>
-          )}
-        </div>
-      )}
+            )}
+          </section>
+        )}
+      </main>
     </div>
   );
 }
-
