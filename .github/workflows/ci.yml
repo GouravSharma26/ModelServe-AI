@@ -63,6 +63,11 @@ jobs:
           cd frontend
           npm ci
 
+      - name: Run automated frontend tests
+        run: |
+          cd frontend
+          npm run test
+
       - name: Build frontend with Vite
         run: |
           cd frontend

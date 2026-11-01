@@ -16,6 +16,8 @@ artifacts/*
 *.log
 node_modules/
 dist/
+coverage/
+**/coverage/
 .playwright-mcp/
 .DS_Store
 
